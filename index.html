@@ -787,11 +787,16 @@ async function cargarTodo(){
 /* ============ NOMINATIM (municipio real) ============ */
 async function detectarMunicipio(lat,lng){
   try{
-    const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+lat+'&lon='+lng+'&zoom=10&accept-language=es';
+    const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+lat+'&lon='+lng+'&zoom=8&accept-language=es';
     const r = await fetch(url, {headers:{'Accept':'application/json'}});
     const j = await r.json();
     const a = j.address || {};
-    return a.city || a.town || a.municipality || a.village || a.county || a.state_district || 'Sin determinar';
+    // Prioridad: nivel partido/municipio (county), no la localidad o el barrio.
+    // Así "Fátima" o "Parque Sakura" se registran bajo su partido real.
+    let m = a.county || a.state_district || a.municipality || a.city || a.town || a.village || 'Sin determinar';
+    // Normalizar: "Partido de Exaltación de la Cruz" -> "Exaltación de la Cruz"
+    m = m.replace(/^Partido (de la |del |de )?/i, '').trim();
+    return m || 'Sin determinar';
   }catch(e){
     return 'Sin determinar';
   }
