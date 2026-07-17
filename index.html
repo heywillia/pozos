@@ -9,6 +9,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
 <style>
   :root{
     --pintura:#FFC400;
@@ -281,6 +282,106 @@
   @keyframes girar{to{transform:rotate(360deg)}}
   #cargando p{font-size:13px;color:var(--antracita-2);font-weight:500}
   @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important} }
+
+  /* cursor de precisión en modo reporte */
+  body.reportando .leaflet-container{cursor:crosshair !important}
+
+  /* botón ayuda en el header */
+  .btn-ayuda{
+    width:28px;height:28px;border-radius:50%;flex-shrink:0;
+    background:rgba(255,255,255,.7);
+    border:1px solid rgba(43,44,46,.12);
+    color:var(--antracita-2);font-size:14px;font-weight:700;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.9);
+  }
+
+  /* onboarding */
+  #velo{
+    position:absolute;inset:0;z-index:1600;
+    background:rgba(43,44,46,.25);
+    -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+    opacity:0;pointer-events:none;transition:opacity .25s ease;
+  }
+  #velo.ver{opacity:1;pointer-events:auto}
+  #sheetAyuda{
+    position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:1700;
+    background:rgba(255,255,255,.85);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    border:1px solid var(--glass-borde);
+    border-radius:28px;box-shadow:0 -8px 40px rgba(43,44,46,.22), inset 0 1px 0 rgba(255,255,255,.95);
+    padding:24px 22px;
+    transform:translateY(130%);transition:transform .3s cubic-bezier(.32,.72,0,1);
+    max-height:80vh;overflow-y:auto;
+  }
+  #sheetAyuda.abierta{transform:translateY(0)}
+  #sheetAyuda h2{font-size:19px;font-weight:700;letter-spacing:-.03em;margin-bottom:4px}
+  #sheetAyuda .intro{font-size:13px;color:var(--antracita-2);margin-bottom:18px;line-height:1.5}
+  .paso{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
+  .paso .n{
+    width:34px;height:34px;flex-shrink:0;border-radius:12px;
+    background:linear-gradient(180deg,var(--pintura-suave),var(--pintura));
+    border:1px solid rgba(255,255,255,.7);
+    box-shadow:0 3px 10px rgba(255,196,0,.3), inset 0 1px 0 rgba(255,255,255,.6);
+    display:flex;align-items:center;justify-content:center;font-size:16px;
+  }
+  .paso .t{font-size:13.5px;font-weight:700;color:var(--antracita)}
+  .paso .d{font-size:12.5px;color:var(--antracita-2);line-height:1.5;margin-top:2px}
+  .paso .d .mini{
+    display:inline-block;width:8px;height:8px;border-radius:50%;
+    margin:0 3px;vertical-align:middle;box-shadow:0 1px 2px rgba(0,0,0,.2)
+  }
+
+  /* cluster de pines */
+  .cluster-pozos{
+    background:linear-gradient(180deg,var(--pintura-suave),var(--pintura));
+    border:2.5px solid #fff;border-radius:50%;
+    box-shadow:0 4px 12px rgba(43,44,46,.3);
+    display:flex;align-items:center;justify-content:center;
+    font-family:inherit;font-size:12px;font-weight:800;color:var(--antracita);
+  }
+
+  /* filtro por municipio */
+  #filtroMuni{
+    position:absolute;top:calc(84px + env(safe-area-inset-top));left:14px;z-index:1000;
+    background:var(--glass);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    border:1px solid var(--glass-borde);
+    border-radius:99px;box-shadow:var(--glass-sombra);
+    color:var(--antracita);
+    padding:9px 14px;font-size:12.5px;font-weight:600;
+    max-width:56vw;
+    appearance:none;-webkit-appearance:none;cursor:pointer;
+    font-family:inherit;
+  }
+
+  /* botón compartir en la ficha */
+  .b-compartir{
+    width:100%;margin-top:8px;border:none;border-radius:13px;padding:10px 6px;
+    font-size:12px;font-weight:700;cursor:pointer;
+    background:rgba(43,44,46,.07);color:var(--antracita);
+    border:1px solid rgba(43,44,46,.08);
+  }
+
+  /* FAQs */
+  .faqs{margin:18px 0 4px;border-top:1px solid rgba(43,44,46,.1);padding-top:14px}
+  .faqs h4{font-size:13px;font-weight:700;letter-spacing:.02em;color:var(--antracita-2);text-transform:uppercase;margin-bottom:8px;font-size:11px}
+  .faqs details{
+    border-bottom:1px solid rgba(43,44,46,.08);
+    padding:9px 0;
+  }
+  .faqs summary{
+    font-size:13px;font-weight:600;color:var(--antracita);cursor:pointer;
+    list-style:none;display:flex;justify-content:space-between;align-items:center;
+  }
+  .faqs summary::after{content:"+";color:var(--antracita-2);font-size:15px;font-weight:600}
+  .faqs details[open] summary::after{content:"–"}
+  .faqs details p{font-size:12.5px;color:var(--antracita-2);line-height:1.55;padding-top:7px}
+  .footer-apoyo{
+    margin-top:16px;text-align:center;
+  }
+  .footer-apoyo p{font-size:11.5px;color:var(--antracita-2);margin-bottom:8px}
+  .footer-apoyo img{height:38px}
 </style>
 </head>
 <body>
@@ -295,9 +396,15 @@
         <div class="logo-mark"></div>
         <h1>Mapa de <span>Pozos</span></h1>
       </div>
-      <div class="kpi"><b id="kpiActivos">0</b>pozos sin arreglar</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="kpi"><b id="kpiActivos">0</b>pozos sin arreglar</div>
+        <button class="btn-ayuda" onclick="abrirAyuda()" title="Cómo funciona" aria-label="Cómo funciona">?</button>
+      </div>
     </div>
     <div id="modoReporte">📍 Tocá el mapa donde está el pozo <button onclick="cancelarReporte()">Cancelar</button></div>
+    <select id="filtroMuni" onchange="aplicarFiltro(this.value)">
+      <option value="">Todos los municipios</option>
+    </select>
     <div class="leyenda">
       <span class="dot" style="background:var(--rojo)"></span>Reportado<br>
       <span class="dot" style="background:var(--naranja)"></span>Verificado (3+ vecinos)<br>
@@ -326,6 +433,10 @@
     <div class="rk-nota">
       Cada dato de esta pantalla sale de los reportes del mapa: nadie lo carga a mano.
     </div>
+    <div class="footer-apoyo">
+      <p>Mapa de Pozos es un proyecto independiente, sin financiamiento de nadie.</p>
+      <a href="https://cafecito.app/heywillie" rel="noopener" target="_blank"><img src="https://cdn.cafecito.app/imgs/buttons/button_1.svg" alt="Invitame un café en cafecito.app"></a>
+    </div>
   </section>
 
   <div class="barra" id="barraRanking" style="display:none">
@@ -339,12 +450,72 @@
 
 <div id="toast"></div>
 
+<div id="velo" onclick="cerrarAyuda()"></div>
+<div id="sheetAyuda">
+  <h2>Bienvenido a Mapa de Pozos</h2>
+  <p class="intro">Un mapa hecho entre todos para que los pozos dejen de ser invisibles.</p>
+  <div class="paso">
+    <div class="n">📍</div>
+    <div>
+      <div class="t">Reportá un pozo</div>
+      <div class="d">Tocá "Reportar pozo" y marcá en el mapa dónde está. Elegís el tamaño y listo: 10 segundos, sin registrarte.</div>
+    </div>
+  </div>
+  <div class="paso">
+    <div class="n">🤝</div>
+    <div>
+      <div class="t">Confirmá los de tu zona</div>
+      <div class="d">Tocá cualquier pozo y avisá si sigue ahí o si lo arreglaron. Con 3 vecinos que confirman, pasa de <span class="mini" style="background:#E5484D"></span>reportado a <span class="mini" style="background:#F76B15"></span>verificado. Cuando lo arreglan, queda <span class="mini" style="background:#2FA46C"></span>verde.</div>
+    </div>
+  </div>
+  <div class="paso">
+    <div class="n">🏆</div>
+    <div>
+      <div class="t">Mirá el ranking</div>
+      <div class="d">Con los reportes de todos se arma solo el ranking de municipios: cuántos pozos deben, hace cuánto, y cuánto tardan en arreglar.</div>
+    </div>
+  </div>
+  <div class="faqs">
+    <h4>Preguntas frecuentes</h4>
+    <details>
+      <summary>¿Quién está detrás de esto?</summary>
+      <p>Mapa de Pozos es un desarrollo propio e independiente, hecho por una sola persona. No recibe aportes ni financiamiento de nadie: ni de gobiernos, ni de partidos políticos, ni de empresas. Los datos son de los vecinos y para los vecinos.</p>
+    </details>
+    <details>
+      <summary>¿Cuánto cuesta usarlo?</summary>
+      <p>Nada. Es gratis, sin cuentas, sin registro y sin publicidad.</p>
+    </details>
+    <details>
+      <summary>¿Qué datos míos guardan?</summary>
+      <p>Ninguno personal. Solo se guarda la ubicación del pozo, su tamaño y un identificador anónimo de tu navegador que sirve para que cada persona pueda votar una sola vez por pozo. No sabemos quién sos ni pedimos tu nombre, mail o teléfono.</p>
+    </details>
+    <details>
+      <summary>¿Cómo se evita que carguen cualquier cosa?</summary>
+      <p>Cada dispositivo puede opinar una sola vez por pozo, y un pozo recién se considera "verificado" cuando 3 vecinos distintos lo confirman. La comunidad es el filtro.</p>
+    </details>
+    <details>
+      <summary>¿Los municipios ven esto?</summary>
+      <p>El mapa y el ranking son públicos: cualquiera puede verlos, incluidos los municipios. Esa es justamente la idea — que los datos estén a la vista para poder reclamar con fundamento.</p>
+    </details>
+    <details>
+      <summary>¿Cómo puedo ayudar?</summary>
+      <p>Reportando los pozos de tu zona, confirmando los que ya están cargados, compartiendo la app con tus vecinos y, si querés apoyar el proyecto, invitando un cafecito.</p>
+    </details>
+  </div>
+  <div class="footer-apoyo">
+    <p>¿Te sirve? Podés apoyar este proyecto independiente:</p>
+    <a href="https://cafecito.app/heywillie" rel="noopener" target="_blank"><img src="https://cdn.cafecito.app/imgs/buttons/button_1.svg" alt="Invitame un café en cafecito.app"></a>
+  </div>
+  <button class="btn btn-amarillo" style="margin-top:16px" onclick="cerrarAyuda()">Entendido, vamos al mapa</button>
+</div>
+
 <nav>
   <button class="activa" id="tabMapa" onclick="irA('mapa')"><span class="ic">🗺️</span>Mapa</button>
   <button id="tabRanking" onclick="irA('ranking')"><span class="ic">🏆</span>Ranking</button>
 </nav>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script>
@@ -370,12 +541,31 @@ const misVotos = new Set(); // se llena desde la base al iniciar
 
 /* ============ MAPA ============ */
 const map = L.map('map',{zoomControl:false}).setView([-34.6037,-58.3816], 12);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
-  maxZoom:19, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+  maxZoom:19,
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
 }).addTo(map);
 L.control.zoom({position:'topright'}).addTo(map);
 
 const COLORES = {reportado:'#E5484D', verificado:'#F76B15', arreglado:'#2FA46C'};
+
+/* grupo de clusters con estilo propio */
+const cluster = L.markerClusterGroup({
+  maxClusterRadius: 46,
+  showCoverageOnHover: false,
+  iconCreateFunction: function(c){
+    const n = c.getChildCount();
+    const s = n < 10 ? 34 : n < 50 ? 40 : 48;
+    return L.divIcon({
+      className:'',
+      html:'<div class="cluster-pozos" style="width:'+s+'px;height:'+s+'px">'+n+'</div>',
+      iconSize:[s,s], iconAnchor:[s/2,s/2]
+    });
+  }
+});
+map.addLayer(cluster);
+
+let filtroMuni = '';
 
 function icono(p){
   const size = p.tamano==='Crater'?22 : p.tamano==='Mediano'?17 : 13;
@@ -397,12 +587,13 @@ function fichaHTML(p){
   const diasTxt = p.estado==='arreglado' && p.arreglado_at
     ? '<div class="dias">'+Math.max(0,diasDesde(p.created_at)-diasDesde(p.arreglado_at))+'<small>días tardó el arreglo</small></div>'
     : '<div class="dias">'+diasDesde(p.created_at)+'<small>días sin arreglar</small></div>';
-  const botones = p.estado==='arreglado' ? '' :
+  const botones = (p.estado==='arreglado' ? '' :
     '<div class="acciones">'+
       '<button class="b-sigue" '+(ya?'disabled':'')+' onclick="votar('+p.id+',\'sigue\')">Sigue ahí 👎</button>'+
       '<button class="b-arreglado" '+(ya?'disabled':'')+' onclick="votar('+p.id+',\'arreglado\')">Lo arreglaron ✅</button>'+
     '</div>'+
-    (ya?'<div class="voto-ok">Ya opinaste sobre este pozo (1 voto por vecino)</div>':'');
+    (ya?'<div class="voto-ok">Ya opinaste sobre este pozo (1 voto por vecino)</div>':''))+
+    '<button class="b-compartir" onclick="compartirPozo('+p.id+')">Compartir este pozo 🔗</button>';
   return '<div class="ficha">'+
     '<span class="estado" style="background:'+COLORES[p.estado]+'">'+etiquetas[p.estado]+'</span>'+
     diasTxt+
@@ -411,10 +602,68 @@ function fichaHTML(p){
 }
 
 function pintar(p){
-  if(capas[p.id]) map.removeLayer(capas[p.id]);
-  const m = L.marker([p.lat,p.lng],{icon:icono(p)}).addTo(map);
+  if(capas[p.id]) cluster.removeLayer(capas[p.id]);
+  if(filtroMuni && p.municipio !== filtroMuni){ delete capas[p.id]; return; }
+  const m = L.marker([p.lat,p.lng],{icon:icono(p)});
   m.bindPopup(function(){return fichaHTML(p)},{closeButton:false});
+  cluster.addLayer(m);
   capas[p.id]=m;
+}
+
+function repintarTodo(){
+  cluster.clearLayers();
+  for(const k in capas) delete capas[k];
+  pozos.forEach(pintar);
+}
+
+/* ============ FILTRO POR MUNICIPIO ============ */
+function actualizarFiltroOpciones(){
+  const sel = document.getElementById('filtroMuni');
+  const actual = sel.value;
+  const munis = [...new Set(pozos.map(p=>p.municipio))].sort((a,b)=>a.localeCompare(b,'es'));
+  sel.innerHTML = '<option value="">Todos los municipios</option>' +
+    munis.map(m=>'<option value="'+m.replace(/"/g,'&quot;')+'">'+m+'</option>').join('');
+  if(munis.includes(actual)) sel.value = actual;
+}
+function aplicarFiltro(v){
+  filtroMuni = v;
+  repintarTodo();
+  const visibles = pozos.filter(p=>!filtroMuni || p.municipio===filtroMuni);
+  if(visibles.length && cluster.getLayers().length){
+    map.fitBounds(cluster.getBounds().pad(0.2));
+  }
+  toast(v ? 'Mostrando: '+v : 'Mostrando todos los municipios');
+}
+
+/* ============ COMPARTIR POZO ============ */
+async function compartirPozo(id){
+  const p = pozos.find(x=>x.id===id);
+  if(!p) return;
+  const url = location.origin + location.pathname + '?pozo=' + id;
+  const texto = 'Pozo '+(p.tamano==='Crater'?'cráter':p.tamano.toLowerCase())+' en '+p.municipio+
+    ', hace '+diasDesde(p.created_at)+' días sin arreglar. Entrá y confirmalo así queda verificado:';
+  if(navigator.share){
+    try{ await navigator.share({title:'Mapa de Pozos', text:texto, url:url}); }catch(e){}
+  } else {
+    try{
+      await navigator.clipboard.writeText(texto+' '+url);
+      toast('Link copiado, pegalo donde quieras');
+    }catch(e){
+      toast(url);
+    }
+  }
+}
+
+/* ============ LINK DIRECTO A UN POZO ============ */
+function abrirPozoDeURL(){
+  const id = parseInt(new URLSearchParams(location.search).get('pozo'));
+  if(!id) return false;
+  const p = pozos.find(x=>x.id===id);
+  if(!p){ toast('Ese pozo ya no está en el mapa'); return false; }
+  map.setView([p.lat,p.lng], 17);
+  // zoomToShowLayer abre el cluster si el pin está agrupado
+  if(capas[p.id]) cluster.zoomToShowLayer(capas[p.id], function(){ capas[p.id].openPopup(); });
+  return true;
 }
 function actualizarKPI(){
   const n = pozos.filter(p=>p.estado!=='arreglado').length;
@@ -432,13 +681,13 @@ async function cargarTodo(){
     if(rPozos.error) throw rPozos.error;
     pozos = rPozos.data || [];
     (rVotos.data || []).forEach(v => misVotos.add(v.pozo_id));
-    pozos.forEach(pintar);
+    repintarTodo();
+    actualizarFiltroOpciones();
     actualizarKPI();
     renderRanking();
-    // centrar en los pozos si hay
-    if(pozos.length){
-      const grupo = L.featureGroup(Object.values(capas));
-      map.fitBounds(grupo.getBounds().pad(0.2));
+    // si vienen por link directo a un pozo, ir ahí; si no, encuadrar todos
+    if(!abrirPozoDeURL() && pozos.length && cluster.getLayers().length){
+      map.fitBounds(cluster.getBounds().pad(0.2));
     }
   }catch(e){
     console.error(e);
@@ -505,12 +754,14 @@ let reportando=false, nuevoLatLng=null, tamanoSel=null, muniPendiente=null;
 
 function iniciarReporte(){
   reportando=true;
+  document.body.classList.add('reportando');
   document.getElementById('modoReporte').style.display='flex';
   document.getElementById('fab').style.display='none';
   document.getElementById('fabUbicacion').style.display='none';
 }
 function cancelarReporte(){
   reportando=false; nuevoLatLng=null; tamanoSel=null; muniPendiente=null;
+  document.body.classList.remove('reportando');
   document.getElementById('modoReporte').style.display='none';
   document.getElementById('fab').style.display='flex';
   document.getElementById('fabUbicacion').style.display='flex';
@@ -550,6 +801,7 @@ async function confirmarReporte(){
   }
   pozos.push(r.data);
   pintar(r.data);
+  actualizarFiltroOpciones();
   cancelarReporte();
   actualizarKPI(); renderRanking();
   toast('Pozo reportado en '+r.data.municipio);
@@ -614,6 +866,20 @@ function toast(msg){
   t.textContent=msg; t.classList.add('ver');
   clearTimeout(toastTimer);
   toastTimer=setTimeout(function(){t.classList.remove('ver')},2600);
+}
+
+/* ============ AYUDA / ONBOARDING ============ */
+function abrirAyuda(){
+  document.getElementById('velo').classList.add('ver');
+  document.getElementById('sheetAyuda').classList.add('abierta');
+}
+function cerrarAyuda(){
+  document.getElementById('velo').classList.remove('ver');
+  document.getElementById('sheetAyuda').classList.remove('abierta');
+  localStorage.setItem('mp_onboarding_visto','1');
+}
+if(!localStorage.getItem('mp_onboarding_visto')){
+  setTimeout(abrirAyuda, 600);
 }
 
 /* ============ PWA ============ */
