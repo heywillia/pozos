@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#F5F4F1">
+<title>Mapa de Pozos</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{
+    --pintura:#FFC400;
+    --pintura-suave:#FFD84D;
+    --antracita:#2B2C2E;
+    --antracita-2:#5A5B5E;
+    --offwhite:#F5F4F1;
+    --rojo:#E5484D;
+    --naranja:#F76B15;
+    --verde:#2FA46C;
+    --glass:rgba(255,255,255,.62);
+    --glass-borde:rgba(255,255,255,.75);
+    --glass-sombra:0 8px 32px rgba(43,44,46,.14), inset 0 1px 0 rgba(255,255,255,.85);
+    --blur:blur(22px) saturate(180%);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden}
+  body{
+    font-family:-apple-system,'SF Pro Text','Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+    background:var(--offwhite);color:var(--antracita);
+  }
+  main{position:absolute;inset:0;overflow:hidden}
+  .vista{position:absolute;inset:0;display:none}
+  .vista.activa{display:block}
+  #map{width:100%;height:100%;background:#e9eae6}
+
+  .barra{
+    position:absolute;top:calc(14px + env(safe-area-inset-top));left:14px;right:14px;z-index:1200;
+    background:var(--glass);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    border:1px solid var(--glass-borde);
+    border-radius:22px;box-shadow:var(--glass-sombra);
+    padding:12px 18px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .logo{display:flex;align-items:center;gap:10px}
+  .logo-mark{
+    width:30px;height:30px;border-radius:50%;flex-shrink:0;
+    background:radial-gradient(circle at 35% 35%, #6a6b70 0%, #2b2c2e 72%);
+    border:2.5px solid var(--pintura);
+    box-shadow:0 2px 8px rgba(43,44,46,.25);
+  }
+  .logo h1{font-size:16.5px;font-weight:700;letter-spacing:-.02em;color:var(--antracita)}
+  .logo h1 span{color:#B8890A}
+  .kpi{font-size:10.5px;color:var(--antracita-2);text-align:right;line-height:1.3;font-weight:500}
+  .kpi b{color:var(--antracita);font-size:17px;display:block;font-weight:700;letter-spacing:-.02em}
+
+  #fab, #fabUbicacion{
+    position:absolute;z-index:1000;cursor:pointer;
+    border:1px solid rgba(255,255,255,.7);
+    display:flex;align-items:center;gap:8px;
+    transition:transform .15s cubic-bezier(.34,1.56,.64,1);
+  }
+  #fab{
+    right:16px;bottom:calc(96px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg,var(--pintura-suave),var(--pintura));
+    color:var(--antracita);
+    border-radius:20px;
+    padding:15px 20px;font-size:15px;font-weight:700;letter-spacing:-.01em;
+    box-shadow:0 10px 28px rgba(255,196,0,.42), inset 0 1px 0 rgba(255,255,255,.6);
+  }
+  #fabUbicacion{
+    right:16px;bottom:calc(162px + env(safe-area-inset-bottom));
+    background:var(--glass);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    border-radius:16px;padding:12px 14px;font-size:16px;
+    box-shadow:var(--glass-sombra);
+  }
+  #fab:active, #fabUbicacion:active{transform:scale(.93)}
+
+  #modoReporte{
+    position:absolute;top:calc(84px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);
+    z-index:1000;
+    background:var(--glass);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    border:1px solid var(--glass-borde);border-radius:99px;
+    box-shadow:var(--glass-sombra);
+    color:var(--antracita);
+    padding:11px 18px;font-size:13px;font-weight:600;
+    display:none;align-items:center;gap:12px;white-space:nowrap;
+  }
+  #modoReporte button{
+    background:none;border:none;color:var(--antracita-2);font-size:13px;
+    font-weight:600;cursor:pointer;text-decoration:underline;
+  }
+
+  .sheet{
+    position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:1400;
+    background:rgba(255,255,255,.78);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    border:1px solid var(--glass-borde);
+    border-radius:28px;box-shadow:0 -8px 40px rgba(43,44,46,.18), inset 0 1px 0 rgba(255,255,255,.9);
+    padding:20px 20px 22px;
+    transform:translateY(140%);transition:transform .28s cubic-bezier(.32,.72,0,1);
+  }
+  .sheet.abierta{transform:translateY(0)}
+  .sheet h3{font-size:16px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+  .sheet p.sub{font-size:12.5px;color:var(--antracita-2);margin-bottom:16px}
+  .sheet p.sub b{color:#B8890A;font-weight:700}
+  .tamanos{display:flex;gap:10px;margin-bottom:18px}
+  .tamano{
+    flex:1;background:rgba(255,255,255,.55);
+    border:1.5px solid rgba(43,44,46,.1);
+    border-radius:18px;padding:14px 6px;text-align:center;cursor:pointer;
+    transition:all .15s ease;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.8);
+  }
+  .tamano.sel{
+    border-color:var(--pintura);
+    background:rgba(255,244,204,.85);
+    box-shadow:0 4px 14px rgba(255,196,0,.3), inset 0 1px 0 rgba(255,255,255,.9);
+    transform:translateY(-2px);
+  }
+  .tamano .icono{font-size:22px;display:block;margin-bottom:5px}
+  .tamano .nombre{font-size:12.5px;font-weight:600;color:var(--antracita)}
+  .btn{
+    width:100%;border:none;border-radius:16px;padding:15px;
+    font-size:15px;font-weight:700;cursor:pointer;letter-spacing:-.01em;
+  }
+  .btn-amarillo{
+    background:linear-gradient(180deg,var(--pintura-suave),var(--pintura));
+    color:var(--antracita);
+    border:1px solid rgba(255,255,255,.7);
+    box-shadow:0 6px 20px rgba(255,196,0,.4), inset 0 1px 0 rgba(255,255,255,.6);
+  }
+  .btn-amarillo:disabled{opacity:.35;box-shadow:none}
+
+  .leaflet-popup-content-wrapper{
+    background:rgba(255,255,255,.75);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    color:var(--antracita);
+    border:1px solid var(--glass-borde);
+    border-radius:22px;
+    box-shadow:0 12px 40px rgba(43,44,46,.2), inset 0 1px 0 rgba(255,255,255,.9);
+  }
+  .leaflet-popup-tip{
+    background:rgba(255,255,255,.75);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+  }
+  .leaflet-popup-content{margin:16px 18px;min-width:215px}
+  .ficha .estado{
+    display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;
+    text-transform:uppercase;padding:4px 10px;border-radius:99px;margin-bottom:10px;color:#fff;
+  }
+  .ficha .dias{font-size:30px;font-weight:700;line-height:1;letter-spacing:-.03em;color:var(--antracita)}
+  .ficha .dias small{font-size:11px;font-weight:500;color:var(--antracita-2);display:block;margin-top:3px;letter-spacing:0}
+  .ficha .meta{font-size:12.5px;color:var(--antracita-2);margin:12px 0 14px;line-height:1.55}
+  .ficha .meta b{color:var(--antracita);font-weight:600}
+  .acciones{display:flex;gap:8px}
+  .acciones button{
+    flex:1;border:none;border-radius:13px;padding:11px 6px;
+    font-size:12px;font-weight:700;cursor:pointer;
+    border:1px solid rgba(255,255,255,.6);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.5);
+  }
+  .b-sigue{background:rgba(229,72,77,.14);color:#C43A3F}
+  .b-arreglado{background:rgba(47,164,108,.16);color:#1F7A4E}
+  .acciones button:disabled{opacity:.4}
+  .voto-ok{font-size:11px;color:#1F7A4E;font-weight:600;margin-top:9px}
+
+  #vistaRanking{
+    overflow-y:auto;background:var(--offwhite);
+    padding:20px 16px 130px;
+  }
+  .rk-titulo{font-size:22px;font-weight:700;letter-spacing:-.03em;margin-bottom:3px;color:var(--antracita)}
+  .rk-sub{font-size:12.5px;color:var(--antracita-2);margin-bottom:18px}
+  .rk-card{
+    background:var(--glass);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    border:1px solid var(--glass-borde);
+    border-radius:22px;padding:16px;margin-bottom:12px;
+    display:flex;align-items:center;gap:14px;
+    box-shadow:var(--glass-sombra);
+  }
+  .rk-pos{
+    font-size:15px;font-weight:700;color:var(--antracita);
+    width:38px;height:38px;flex-shrink:0;border-radius:50%;
+    background:linear-gradient(180deg,var(--pintura-suave),var(--pintura));
+    border:1px solid rgba(255,255,255,.7);
+    box-shadow:0 4px 12px rgba(255,196,0,.35), inset 0 1px 0 rgba(255,255,255,.6);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .rk-info{flex:1;min-width:0}
+  .rk-muni{font-size:15.5px;font-weight:700;letter-spacing:-.02em;color:var(--antracita)}
+  .rk-detalle{font-size:11.5px;color:var(--antracita-2);margin-top:4px;line-height:1.55}
+  .rk-detalle b{color:var(--antracita);font-weight:600}
+  .rk-num{text-align:right;flex-shrink:0}
+  .rk-num .n{font-size:26px;font-weight:700;letter-spacing:-.03em;color:var(--rojo)}
+  .rk-num .l{font-size:9px;color:var(--antracita-2);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+  .rk-nota{
+    margin-top:16px;font-size:12px;color:var(--antracita-2);line-height:1.65;
+    background:var(--glass);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    border:1px solid var(--glass-borde);border-radius:18px;
+    box-shadow:var(--glass-sombra);
+    padding:14px 16px;
+  }
+  .rk-nota::before{content:"◆";color:var(--pintura);margin-right:8px}
+
+  nav{
+    position:absolute;left:50%;transform:translateX(-50%);
+    bottom:calc(16px + env(safe-area-inset-bottom));z-index:1300;
+    display:flex;gap:4px;
+    background:var(--glass);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    border:1px solid var(--glass-borde);
+    border-radius:99px;box-shadow:var(--glass-sombra);
+    padding:5px;
+  }
+  nav button{
+    background:none;border:none;color:var(--antracita-2);
+    padding:9px 22px;font-size:12.5px;font-weight:600;cursor:pointer;
+    display:flex;align-items:center;gap:7px;
+    border-radius:99px;transition:all .18s ease;
+  }
+  nav button.activa{
+    color:var(--antracita);
+    background:rgba(255,255,255,.85);
+    box-shadow:0 3px 10px rgba(43,44,46,.12), inset 0 1px 0 rgba(255,255,255,.95);
+  }
+  nav button .ic{font-size:16px;line-height:1}
+
+  .leyenda{
+    position:absolute;left:14px;bottom:calc(96px + env(safe-area-inset-bottom));z-index:1000;
+    background:var(--glass);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    border:1px solid var(--glass-borde);
+    border-radius:16px;box-shadow:var(--glass-sombra);
+    padding:10px 13px;
+    font-size:10.5px;line-height:1.9;color:var(--antracita-2);font-weight:500;
+  }
+  .leyenda .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+
+  #toast{
+    position:absolute;bottom:calc(150px + env(safe-area-inset-bottom));left:50%;
+    transform:translateX(-50%) translateY(16px);
+    background:rgba(43,44,46,.88);
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+    color:#fff;
+    padding:11px 20px;border-radius:99px;font-size:13px;font-weight:600;
+    opacity:0;transition:all .28s cubic-bezier(.32,.72,0,1);z-index:1500;pointer-events:none;
+    white-space:nowrap;box-shadow:0 8px 24px rgba(43,44,46,.3);
+    max-width:90vw;overflow:hidden;text-overflow:ellipsis;
+  }
+  #toast.ver{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .pin-pozo{
+    border-radius:50%;border:2.5px solid #fff;
+    box-shadow:0 3px 8px rgba(43,44,46,.35);
+  }
+  .leaflet-control-zoom{margin-top:calc(84px + env(safe-area-inset-top)) !important}
+  .leaflet-control-zoom a{
+    background:var(--glass) !important;
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    color:var(--antracita) !important;
+    border:1px solid var(--glass-borde) !important;
+  }
+  #cargando{
+    position:absolute;inset:0;z-index:2000;
+    background:var(--offwhite);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    transition:opacity .3s ease;
+  }
+  #cargando.oculto{opacity:0;pointer-events:none}
+  .spinner{
+    width:40px;height:40px;border-radius:50%;
+    border:4px solid rgba(43,44,46,.12);border-top-color:var(--pintura);
+    animation:girar .8s linear infinite;
+  }
+  @keyframes girar{to{transform:rotate(360deg)}}
+  #cargando p{font-size:13px;color:var(--antracita-2);font-weight:500}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important} }
+</style>
+</head>
+<body>
+
+<div id="cargando"><div class="spinner"></div><p>Cargando pozos…</p></div>
+
+<main>
+  <section class="vista activa" id="vistaMapa">
+    <div id="map"></div>
+    <div class="barra">
+      <div class="logo">
+        <div class="logo-mark"></div>
+        <h1>Mapa de <span>Pozos</span></h1>
+      </div>
+      <div class="kpi"><b id="kpiActivos">0</b>pozos sin arreglar</div>
+    </div>
+    <div id="modoReporte">📍 Tocá el mapa donde está el pozo <button onclick="cancelarReporte()">Cancelar</button></div>
+    <div class="leyenda">
+      <span class="dot" style="background:var(--rojo)"></span>Reportado<br>
+      <span class="dot" style="background:var(--naranja)"></span>Verificado (3+ vecinos)<br>
+      <span class="dot" style="background:var(--verde)"></span>Arreglado
+    </div>
+    <button id="fabUbicacion" onclick="miUbicacion()" title="Ir a mi ubicación">🧭</button>
+    <button id="fab" onclick="iniciarReporte()">＋ Reportar pozo</button>
+
+    <div class="sheet" id="sheetTamano">
+      <h3>¿Qué tan grande es?</h3>
+      <p class="sub">Municipio: <b id="muniDetectado">detectando…</b></p>
+      <div class="tamanos">
+        <div class="tamano" data-t="Chico" onclick="elegirTamano(this)"><span class="icono">🕳️</span><span class="nombre">Chico</span></div>
+        <div class="tamano" data-t="Mediano" onclick="elegirTamano(this)"><span class="icono">🕳️🕳️</span><span class="nombre">Mediano</span></div>
+        <div class="tamano" data-t="Crater" onclick="elegirTamano(this)"><span class="icono">🌋</span><span class="nombre">Cráter</span></div>
+      </div>
+      <button class="btn btn-amarillo" id="btnConfirmar" disabled onclick="confirmarReporte()">Publicar reporte</button>
+    </div>
+  </section>
+
+  <section class="vista" id="vistaRanking">
+    <div style="height:calc(74px + env(safe-area-inset-top))"></div>
+    <div class="rk-titulo">Ranking de municipios</div>
+    <div class="rk-sub">Se actualiza solo con cada reporte y cada arreglo confirmado.</div>
+    <div id="rkLista"></div>
+    <div class="rk-nota">
+      Cada dato de esta pantalla sale de los reportes del mapa: nadie lo carga a mano.
+    </div>
+  </section>
+
+  <div class="barra" id="barraRanking" style="display:none">
+    <div class="logo">
+      <div class="logo-mark"></div>
+      <h1>Mapa de <span>Pozos</span></h1>
+    </div>
+    <div class="kpi"><b id="kpiActivos2">0</b>pozos sin arreglar</div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<nav>
+  <button class="activa" id="tabMapa" onclick="irA('mapa')"><span class="ic">🗺️</span>Mapa</button>
+  <button id="tabRanking" onclick="irA('ranking')"><span class="ic">🏆</span>Ranking</button>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+/* ============ SUPABASE ============ */
+const sb = supabase.createClient(window.APP_CONFIG.SUPABASE_URL, window.APP_CONFIG.SUPABASE_KEY);
+
+/* ============ IDENTIDAD ANÓNIMA ============ */
+function getDeviceId(){
+  let id = localStorage.getItem('mp_device_id');
+  if(!id){
+    id = crypto.randomUUID();
+    localStorage.setItem('mp_device_id', id);
+  }
+  return id;
+}
+const DEVICE_ID = getDeviceId();
+
+/* ============ ESTADO ============ */
+let pozos = [];
+const capas = {};
+const dia = 24*60*60*1000;
+const misVotos = new Set(); // se llena desde la base al iniciar
+
+/* ============ MAPA ============ */
+const map = L.map('map',{zoomControl:false}).setView([-34.6037,-58.3816], 12);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:19, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+}).addTo(map);
+L.control.zoom({position:'topright'}).addTo(map);
+
+const COLORES = {reportado:'#E5484D', verificado:'#F76B15', arreglado:'#2FA46C'};
+
+function icono(p){
+  const size = p.tamano==='Crater'?22 : p.tamano==='Mediano'?17 : 13;
+  return L.divIcon({
+    className:'',
+    html:'<div class="pin-pozo" style="width:'+size+'px;height:'+size+'px;background:'+COLORES[p.estado]+'"></div>',
+    iconSize:[size,size], iconAnchor:[size/2,size/2]
+  });
+}
+
+function diasDesde(fechaISO){
+  return Math.max(0, Math.round((Date.now() - new Date(fechaISO).getTime())/dia));
+}
+
+function fichaHTML(p){
+  const ya = misVotos.has(p.id);
+  const etiquetas = {reportado:'Reportado', verificado:'Verificado', arreglado:'Arreglado'};
+  const tamanoBonito = p.tamano==='Crater' ? 'Cráter' : p.tamano;
+  const diasTxt = p.estado==='arreglado' && p.arreglado_at
+    ? '<div class="dias">'+Math.max(0,diasDesde(p.created_at)-diasDesde(p.arreglado_at))+'<small>días tardó el arreglo</small></div>'
+    : '<div class="dias">'+diasDesde(p.created_at)+'<small>días sin arreglar</small></div>';
+  const botones = p.estado==='arreglado' ? '' :
+    '<div class="acciones">'+
+      '<button class="b-sigue" '+(ya?'disabled':'')+' onclick="votar('+p.id+',\'sigue\')">Sigue ahí 👎</button>'+
+      '<button class="b-arreglado" '+(ya?'disabled':'')+' onclick="votar('+p.id+',\'arreglado\')">Lo arreglaron ✅</button>'+
+    '</div>'+
+    (ya?'<div class="voto-ok">Ya opinaste sobre este pozo (1 voto por vecino)</div>':'');
+  return '<div class="ficha">'+
+    '<span class="estado" style="background:'+COLORES[p.estado]+'">'+etiquetas[p.estado]+'</span>'+
+    diasTxt+
+    '<div class="meta">Tamaño: <b>'+tamanoBonito+'</b><br>Municipio: <b>'+p.municipio+'</b><br>Confirmaciones de vecinos: <b>'+p.confirmaciones+'</b></div>'+
+    botones+'</div>';
+}
+
+function pintar(p){
+  if(capas[p.id]) map.removeLayer(capas[p.id]);
+  const m = L.marker([p.lat,p.lng],{icon:icono(p)}).addTo(map);
+  m.bindPopup(function(){return fichaHTML(p)},{closeButton:false});
+  capas[p.id]=m;
+}
+function actualizarKPI(){
+  const n = pozos.filter(p=>p.estado!=='arreglado').length;
+  document.getElementById('kpiActivos').textContent = n;
+  document.getElementById('kpiActivos2').textContent = n;
+}
+
+/* ============ CARGA INICIAL ============ */
+async function cargarTodo(){
+  try{
+    const [rPozos, rVotos] = await Promise.all([
+      sb.from('pozos').select('*'),
+      sb.from('votos').select('pozo_id').eq('device_id', DEVICE_ID)
+    ]);
+    if(rPozos.error) throw rPozos.error;
+    pozos = rPozos.data || [];
+    (rVotos.data || []).forEach(v => misVotos.add(v.pozo_id));
+    pozos.forEach(pintar);
+    actualizarKPI();
+    renderRanking();
+    // centrar en los pozos si hay
+    if(pozos.length){
+      const grupo = L.featureGroup(Object.values(capas));
+      map.fitBounds(grupo.getBounds().pad(0.2));
+    }
+  }catch(e){
+    console.error(e);
+    toast('No se pudieron cargar los pozos. Revisá tu conexión.');
+  }finally{
+    document.getElementById('cargando').classList.add('oculto');
+  }
+}
+
+/* ============ NOMINATIM (municipio real) ============ */
+async function detectarMunicipio(lat,lng){
+  try{
+    const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+lat+'&lon='+lng+'&zoom=10&accept-language=es';
+    const r = await fetch(url, {headers:{'Accept':'application/json'}});
+    const j = await r.json();
+    const a = j.address || {};
+    return a.city || a.town || a.municipality || a.village || a.county || a.state_district || 'Sin determinar';
+  }catch(e){
+    return 'Sin determinar';
+  }
+}
+
+/* ============ VOTAR ============ */
+async function votar(id,tipo){
+  const p = pozos.find(x=>x.id===id);
+  if(!p || misVotos.has(id)) return;
+
+  // 1) registrar el voto: la restricción UNIQUE de la base impide duplicados
+  const rVoto = await sb.from('votos').insert({pozo_id:id, device_id:DEVICE_ID, tipo:tipo});
+  if(rVoto.error){
+    if(rVoto.error.code === '23505'){ // unique violation
+      misVotos.add(id);
+      toast('Ya habías opinado sobre este pozo');
+      map.closePopup();
+      return;
+    }
+    toast('No se pudo registrar tu voto. Probá de nuevo.');
+    return;
+  }
+  misVotos.add(id);
+
+  // 2) actualizar el pozo
+  let cambios;
+  if(tipo==='sigue'){
+    const nuevasConf = p.confirmaciones + 1;
+    cambios = {confirmaciones:nuevasConf};
+    if(nuevasConf>=3 && p.estado==='reportado') cambios.estado='verificado';
+  } else {
+    cambios = {estado:'arreglado', arreglado_at:new Date().toISOString()};
+  }
+  const rUpd = await sb.from('pozos').update(cambios).eq('id', id).select().single();
+  if(rUpd.error){
+    toast('El voto quedó registrado pero no se pudo actualizar el pozo');
+    return;
+  }
+  Object.assign(p, rUpd.data);
+  map.closePopup();
+  pintar(p); actualizarKPI(); renderRanking();
+  toast(tipo==='sigue' ? 'Confirmado: el pozo sigue ahí' : '🎉 Marcado como arreglado');
+}
+
+/* ============ REPORTAR ============ */
+let reportando=false, nuevoLatLng=null, tamanoSel=null, muniPendiente=null;
+
+function iniciarReporte(){
+  reportando=true;
+  document.getElementById('modoReporte').style.display='flex';
+  document.getElementById('fab').style.display='none';
+  document.getElementById('fabUbicacion').style.display='none';
+}
+function cancelarReporte(){
+  reportando=false; nuevoLatLng=null; tamanoSel=null; muniPendiente=null;
+  document.getElementById('modoReporte').style.display='none';
+  document.getElementById('fab').style.display='flex';
+  document.getElementById('fabUbicacion').style.display='flex';
+  document.getElementById('sheetTamano').classList.remove('abierta');
+  document.querySelectorAll('.tamano').forEach(t=>t.classList.remove('sel'));
+  document.getElementById('btnConfirmar').disabled=true;
+}
+map.on('click', async function(e){
+  if(!reportando) return;
+  nuevoLatLng = e.latlng;
+  document.getElementById('muniDetectado').textContent = 'detectando…';
+  document.getElementById('sheetTamano').classList.add('abierta');
+  muniPendiente = await detectarMunicipio(e.latlng.lat, e.latlng.lng);
+  document.getElementById('muniDetectado').textContent = muniPendiente;
+});
+function elegirTamano(el){
+  document.querySelectorAll('.tamano').forEach(t=>t.classList.remove('sel'));
+  el.classList.add('sel');
+  tamanoSel = el.dataset.t;
+  document.getElementById('btnConfirmar').disabled=false;
+}
+async function confirmarReporte(){
+  if(!nuevoLatLng || !tamanoSel) return;
+  const btn = document.getElementById('btnConfirmar');
+  btn.disabled = true; btn.textContent = 'Publicando…';
+  const nuevo = {
+    lat:nuevoLatLng.lat, lng:nuevoLatLng.lng, tamano:tamanoSel,
+    municipio: muniPendiente || 'Sin determinar',
+    estado:'reportado', confirmaciones:1, device_id:DEVICE_ID
+  };
+  const r = await sb.from('pozos').insert(nuevo).select().single();
+  btn.textContent = 'Publicar reporte';
+  if(r.error){
+    btn.disabled = false;
+    toast('No se pudo publicar. Probá de nuevo.');
+    return;
+  }
+  pozos.push(r.data);
+  pintar(r.data);
+  cancelarReporte();
+  actualizarKPI(); renderRanking();
+  toast('Pozo reportado en '+r.data.municipio);
+}
+
+/* ============ MI UBICACIÓN ============ */
+function miUbicacion(){
+  if(!navigator.geolocation){ toast('Tu navegador no soporta geolocalización'); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => map.setView([pos.coords.latitude, pos.coords.longitude], 16),
+    () => toast('No pudimos acceder a tu ubicación')
+  );
+}
+
+/* ============ RANKING ============ */
+function renderRanking(){
+  const stats = {};
+  for(const p of pozos){
+    if(!stats[p.municipio]) stats[p.municipio]={activos:0, masViejo:0, arreglos:[]};
+    const s = stats[p.municipio];
+    if(p.estado!=='arreglado'){
+      s.activos++;
+      s.masViejo = Math.max(s.masViejo, diasDesde(p.created_at));
+    } else if(p.arreglado_at){
+      s.arreglos.push(Math.max(0,diasDesde(p.created_at)-diasDesde(p.arreglado_at)));
+    }
+  }
+  const filas = Object.entries(stats)
+    .map(function(par){
+      const s=par[1];
+      return {muni:par[0], activos:s.activos, masViejo:s.masViejo,
+        prom: s.arreglos.length ? Math.round(s.arreglos.reduce((a,b)=>a+b,0)/s.arreglos.length) : null};
+    })
+    .sort((a,b)=>b.activos-a.activos || b.masViejo-a.masViejo);
+
+  document.getElementById('rkLista').innerHTML = filas.length ? filas.map(function(f,i){
+    return '<div class="rk-card">'+
+      '<div class="rk-pos">'+(i+1)+'</div>'+
+      '<div class="rk-info">'+
+        '<div class="rk-muni">'+f.muni+'</div>'+
+        '<div class="rk-detalle">Pozo más antiguo: <b>'+f.masViejo+' días</b> sin arreglar<br>'+
+        (f.prom!==null ? 'Tarda en promedio <b>'+f.prom+' días</b> en arreglar' : 'Todavía no arregló <b>ninguno</b>')+
+        '</div></div>'+
+      '<div class="rk-num"><div class="n">'+f.activos+'</div><div class="l">activos</div></div>'+
+    '</div>';
+  }).join('') : '<div class="rk-sub">Todavía no hay pozos reportados. Sé el primero desde el mapa.</div>';
+}
+
+/* ============ UI ============ */
+function irA(v){
+  document.getElementById('vistaMapa').classList.toggle('activa', v==='mapa');
+  document.getElementById('vistaRanking').classList.toggle('activa', v==='ranking');
+  document.getElementById('tabMapa').classList.toggle('activa', v==='mapa');
+  document.getElementById('tabRanking').classList.toggle('activa', v==='ranking');
+  document.getElementById('barraRanking').style.display = v==='ranking' ? 'flex' : 'none';
+  if(v==='mapa') setTimeout(function(){map.invalidateSize()},50);
+  if(v==='ranking') renderRanking();
+}
+let toastTimer;
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('ver');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.classList.remove('ver')},2600);
+}
+
+/* ============ PWA ============ */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js'));
+}
+
+cargarTodo();
+</script>
+</body>
+</html>
