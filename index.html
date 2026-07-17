@@ -239,7 +239,7 @@
   nav button .ic{font-size:16px;line-height:1}
 
   .leyenda{
-    position:absolute;left:14px;bottom:calc(96px + env(safe-area-inset-bottom));z-index:1000;
+    position:absolute;left:14px;bottom:calc(66px + env(safe-area-inset-bottom));z-index:1000;
     background:var(--glass);
     -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
     border:1px solid var(--glass-borde);
@@ -248,6 +248,20 @@
     font-size:10.5px;line-height:1.9;color:var(--antracita-2);font-weight:500;
   }
   .leyenda .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+
+  /* crédito del autor */
+  .credito{
+    position:absolute;left:14px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:1000;
+    background:rgba(43,44,46,.9);
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:99px;box-shadow:0 6px 20px rgba(43,44,46,.3);
+    padding:8px 14px;font-size:11.5px;font-weight:600;
+    color:#fff;text-decoration:none;
+    display:flex;align-items:center;gap:5px;
+  }
+  .credito span{color:rgba(255,255,255,.55);font-weight:500}
+  .credito b{color:var(--pintura);font-weight:700}
 
   #toast{
     position:absolute;bottom:calc(150px + env(safe-area-inset-bottom));left:50%;
@@ -265,6 +279,23 @@
   .pin-pozo{
     border-radius:50%;border:2.5px solid #fff;
     box-shadow:0 3px 8px rgba(43,44,46,.35);
+  }
+  .pin-tierra{
+    border-radius:28%;border:2.5px solid #fff;
+    box-shadow:0 3px 8px rgba(43,44,46,.35);
+  }
+  .tipos{display:flex;gap:8px;margin-bottom:14px}
+  .tipo-btn{
+    flex:1;background:rgba(255,255,255,.55);
+    border:1.5px solid rgba(43,44,46,.1);
+    border-radius:14px;padding:10px 6px;text-align:center;cursor:pointer;
+    font-size:12.5px;font-weight:700;color:var(--antracita);
+    transition:all .15s ease;
+  }
+  .tipo-btn.sel{
+    border-color:var(--pintura);
+    background:rgba(254,244,180,.9);
+    box-shadow:0 3px 12px rgba(254,228,64,.35);
   }
   .leaflet-control-zoom{margin-top:calc(84px + env(safe-area-inset-top)) !important}
   .leaflet-control-zoom a{
@@ -434,19 +465,21 @@
     <div class="leyenda">
       <span class="dot" style="background:var(--reportado)"></span>Reportado<br>
       <span class="dot" style="background:var(--verificado)"></span>Verificado (3+ vecinos)<br>
-      <span class="dot" style="background:var(--arreglado)"></span>Arreglado
+      <span class="dot" style="background:var(--arreglado)"></span>Arreglado<br>
+      <span style="opacity:.75">● pozo &nbsp; ▪ calle de tierra</span>
     </div>
+    <a class="credito" href="https://x.com/heywilli_e" target="_blank" rel="noopener"><span>by</span> <b>heywilli_e</b></a>
     <button id="fabUbicacion" onclick="miUbicacion()" title="Ir a mi ubicación">🧭</button>
     <button id="fab" onclick="iniciarReporte()">＋ Reportar pozo</button>
 
     <div class="sheet" id="sheetTamano">
-      <h3>¿Qué tan grande es?</h3>
-      <p class="sub">Municipio: <b id="muniDetectado">detectando…</b></p>
-      <div class="tamanos">
-        <div class="tamano" data-t="Chico" onclick="elegirTamano(this)"><span class="icono">🕳️</span><span class="nombre">Chico</span></div>
-        <div class="tamano" data-t="Mediano" onclick="elegirTamano(this)"><span class="icono">🕳️🕳️</span><span class="nombre">Mediano</span></div>
-        <div class="tamano" data-t="Crater" onclick="elegirTamano(this)"><span class="icono">🌋</span><span class="nombre">Cráter</span></div>
+      <div class="tipos">
+        <div class="tipo-btn sel" data-tipo="pozo" onclick="elegirTipo('pozo')">🕳️ Pozo</div>
+        <div class="tipo-btn" data-tipo="tierra" onclick="elegirTipo('tierra')">🟤 Calle de tierra</div>
       </div>
+      <h3 id="sheetTitulo">¿Qué tan grande es?</h3>
+      <p class="sub">Municipio: <b id="muniDetectado">detectando…</b></p>
+      <div class="tamanos" id="tamanosCont"></div>
       <button class="btn btn-amarillo" id="btnConfirmar" disabled onclick="confirmarReporte()">Publicar reporte</button>
     </div>
   </section>
@@ -460,7 +493,7 @@
       Cada dato de esta pantalla sale de los reportes del mapa: nadie lo carga a mano.
     </div>
     <div class="footer-apoyo">
-      <p>Mapa de Pozos es un proyecto independiente, sin financiamiento de nadie.</p>
+      <p>Mapa de Pozos es un proyecto independiente de <a href="https://x.com/heywilli_e" target="_blank" rel="noopener" style="color:var(--antracita);font-weight:700;text-decoration:none">@heywilli_e</a>, sin financiamiento de nadie.</p>
       <a href="https://cafecito.app/heywillie" rel="noopener" target="_blank"><img src="https://cdn.cafecito.app/imgs/buttons/button_1.svg" alt="Invitame un café en cafecito.app"></a>
     </div>
   </section>
@@ -484,7 +517,7 @@
     <div class="n">📍</div>
     <div>
       <div class="t">Reportá un pozo</div>
-      <div class="d">Tocá directamente el lugar del mapa donde está el pozo (o usá el botón amarillo). Elegís el tamaño y listo: 10 segundos, sin registrarte.</div>
+      <div class="d">Tocá directamente el lugar del mapa donde está el problema (o usá el botón amarillo). Puede ser un pozo o una calle de tierra en mal estado. Elegís tipo y gravedad, y listo: 10 segundos, sin registrarte.</div>
     </div>
   </div>
   <div class="paso">
@@ -604,11 +637,20 @@ map.addLayer(cluster);
 
 let filtroMuni = '';
 
+const TIPOS = {
+  pozo:  {titulo:'¿Qué tan grande es?', etiquetaFicha:'Tamaño', nombre:'Pozo',
+          opciones:[['Chico','🕳️'],['Mediano','🕳️🕳️'],['Crater','🌋','Cráter']]},
+  tierra:{titulo:'¿Cómo está la calle?', etiquetaFicha:'Estado de la calle', nombre:'Calle de tierra',
+          opciones:[['Deteriorada','🟤'],['Muy deteriorada','🚧'],['Intransitable','⛔']]}
+};
+const SEVERIDAD = {Chico:13, Mediano:17, Crater:22, 'Deteriorada':13, 'Muy deteriorada':17, 'Intransitable':22};
+
 function icono(p){
-  const size = p.tamano==='Crater'?22 : p.tamano==='Mediano'?17 : 13;
+  const size = SEVERIDAD[p.tamano] || 15;
+  const clase = (p.tipo==='tierra') ? 'pin-tierra' : 'pin-pozo';
   return L.divIcon({
     className:'',
-    html:'<div class="pin-pozo" style="width:'+size+'px;height:'+size+'px;background:'+COLORES[p.estado]+'"></div>',
+    html:'<div class="'+clase+'" style="width:'+size+'px;height:'+size+'px;background:'+COLORES[p.estado]+'"></div>',
     iconSize:[size,size], iconAnchor:[size/2,size/2]
   });
 }
@@ -620,6 +662,7 @@ function diasDesde(fechaISO){
 function fichaHTML(p){
   const ya = misVotos.has(p.id);
   const etiquetas = {reportado:'Reportado', verificado:'Verificado', arreglado:'Arreglado'};
+  const tipoInfo = TIPOS[p.tipo || 'pozo'];
   const tamanoBonito = p.tamano==='Crater' ? 'Cráter' : p.tamano;
   const diasTxt = p.estado==='arreglado' && p.arreglado_at
     ? '<div class="dias">'+Math.max(0,diasDesde(p.created_at)-diasDesde(p.arreglado_at))+'<small>días tardó el arreglo</small></div>'
@@ -634,7 +677,7 @@ function fichaHTML(p){
   return '<div class="ficha">'+
     '<span class="estado" style="background:'+COLORES[p.estado]+';color:'+TEXTO_ESTADO[p.estado]+'">'+etiquetas[p.estado]+'</span>'+
     diasTxt+
-    '<div class="meta">Tamaño: <b>'+tamanoBonito+'</b><br>Municipio: <b>'+p.municipio+'</b><br>Confirmaciones de vecinos: <b>'+p.confirmaciones+'</b></div>'+
+    '<div class="meta">'+tipoInfo.nombre+' · '+tipoInfo.etiquetaFicha.toLowerCase()+': <b>'+tamanoBonito+'</b><br>Municipio: <b>'+p.municipio+'</b><br>Confirmaciones de vecinos: <b>'+p.confirmaciones+'</b></div>'+
     botones+'</div>';
 }
 
@@ -677,7 +720,10 @@ async function compartirPozo(id){
   const p = pozos.find(x=>x.id===id);
   if(!p) return;
   const url = location.origin + location.pathname + '?pozo=' + id;
-  const texto = 'Pozo '+(p.tamano==='Crater'?'cráter':p.tamano.toLowerCase())+' en '+p.municipio+
+  const desc = (p.tipo==='tierra')
+    ? 'Calle de tierra '+p.tamano.toLowerCase()
+    : 'Pozo '+(p.tamano==='Crater'?'cráter':p.tamano.toLowerCase());
+  const texto = desc+' en '+p.municipio+
     ', hace '+diasDesde(p.created_at)+' días sin arreglar. Entrá y confirmalo así queda verificado:';
   if(navigator.share){
     try{ await navigator.share({title:'Mapa de Pozos', text:texto, url:url}); }catch(e){}
@@ -787,7 +833,27 @@ async function votar(id,tipo){
 }
 
 /* ============ REPORTAR ============ */
-let reportando=false, nuevoLatLng=null, tamanoSel=null, muniPendiente=null;
+let reportando=false, nuevoLatLng=null, tamanoSel=null, muniPendiente=null, tipoSel='pozo';
+
+function renderTamanos(){
+  const cfg = TIPOS[tipoSel];
+  document.getElementById('sheetTitulo').textContent = cfg.titulo;
+  document.getElementById('tamanosCont').innerHTML = cfg.opciones.map(function(o){
+    const visible = o[2] || o[0];
+    return '<div class="tamano" data-t="'+o[0]+'" onclick="elegirTamano(this)">'+
+      '<span class="icono">'+o[1]+'</span><span class="nombre">'+visible+'</span></div>';
+  }).join('');
+  tamanoSel = null;
+  document.getElementById('btnConfirmar').disabled = true;
+}
+function elegirTipo(t){
+  tipoSel = t;
+  document.querySelectorAll('.tipo-btn').forEach(function(b){
+    b.classList.toggle('sel', b.dataset.tipo===t);
+  });
+  renderTamanos();
+}
+renderTamanos();
 
 function iniciarReporte(){
   reportando=true;
@@ -831,7 +897,7 @@ async function confirmarReporte(){
   const btn = document.getElementById('btnConfirmar');
   btn.disabled = true; btn.textContent = 'Publicando…';
   const nuevo = {
-    lat:nuevoLatLng.lat, lng:nuevoLatLng.lng, tamano:tamanoSel,
+    lat:nuevoLatLng.lat, lng:nuevoLatLng.lng, tamano:tamanoSel, tipo:tipoSel,
     municipio: muniPendiente || 'Sin determinar',
     estado:'reportado', confirmaciones:1, device_id:DEVICE_ID
   };
@@ -847,7 +913,7 @@ async function confirmarReporte(){
   actualizarFiltroOpciones();
   cancelarReporte();
   actualizarKPI(); renderRanking();
-  toast('Pozo reportado en '+r.data.municipio);
+  toast((tipoSel==='tierra'?'Calle de tierra reportada':'Pozo reportado')+' en '+r.data.municipio);
 }
 
 /* ============ MI UBICACIÓN ============ */
