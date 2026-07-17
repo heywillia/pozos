@@ -26,8 +26,11 @@
     --blur:blur(22px) saturate(180%);
   }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%;overflow:hidden}
+  html{height:100%;overflow:hidden}
   body{
+    /* position:fixed es la única forma confiable de bloquear el scroll en iOS Safari */
+    position:fixed;inset:0;width:100%;height:100%;height:100dvh;
+    overflow:hidden;overscroll-behavior:none;touch-action:manipulation;
     font-family:-apple-system,'SF Pro Text','Segoe UI',Roboto,'Helvetica Neue',sans-serif;
     background:var(--offwhite);color:var(--antracita);
   }
@@ -103,9 +106,11 @@
     border:1px solid var(--glass-borde);
     border-radius:28px;box-shadow:0 -8px 40px rgba(43,44,46,.18), inset 0 1px 0 rgba(255,255,255,.9);
     padding:20px 20px 22px;
-    transform:translateY(140%);transition:transform .28s cubic-bezier(.32,.72,0,1);
+    transform:translateY(140%);
+    visibility:hidden;pointer-events:none;
+    transition:transform .28s cubic-bezier(.32,.72,0,1), visibility 0s .28s;
   }
-  .sheet.abierta{transform:translateY(0)}
+  .sheet.abierta{transform:translateY(0);visibility:visible;pointer-events:auto;transition:transform .28s cubic-bezier(.32,.72,0,1)}
   .sheet h3{font-size:16px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
   .sheet p.sub{font-size:12.5px;color:var(--antracita-2);margin-bottom:16px}
   .sheet p.sub b{color:#B8890A;font-weight:700}
@@ -283,8 +288,12 @@
   #cargando p{font-size:13px;color:var(--antracita-2);font-weight:500}
   @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important} }
 
-  /* cursor de precisión en modo reporte */
-  body.reportando .leaflet-container{cursor:crosshair !important}
+  /* cursor de precisión en modo reporte (cubre todas las capas de Leaflet) */
+  body.reportando #map,
+  body.reportando .leaflet-container,
+  body.reportando .leaflet-grab,
+  body.reportando .leaflet-interactive,
+  body.reportando .leaflet-dragging .leaflet-grab{cursor:crosshair !important}
 
   /* botón ayuda en el header */
   .btn-ayuda{
@@ -311,10 +320,13 @@
     border:1px solid var(--glass-borde);
     border-radius:28px;box-shadow:0 -8px 40px rgba(43,44,46,.22), inset 0 1px 0 rgba(255,255,255,.95);
     padding:24px 22px;
-    transform:translateY(130%);transition:transform .3s cubic-bezier(.32,.72,0,1);
-    max-height:80vh;overflow-y:auto;
+    transform:translateY(130%);
+    visibility:hidden;pointer-events:none;
+    transition:transform .3s cubic-bezier(.32,.72,0,1), visibility 0s .3s;
+    max-height:80vh;max-height:80dvh;overflow-y:auto;
+    -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   }
-  #sheetAyuda.abierta{transform:translateY(0)}
+  #sheetAyuda.abierta{transform:translateY(0);visibility:visible;pointer-events:auto;transition:transform .3s cubic-bezier(.32,.72,0,1)}
   #sheetAyuda h2{font-size:19px;font-weight:700;letter-spacing:-.03em;margin-bottom:4px}
   #sheetAyuda .intro{font-size:13px;color:var(--antracita-2);margin-bottom:18px;line-height:1.5}
   .paso{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
@@ -458,7 +470,7 @@
     <div class="n">📍</div>
     <div>
       <div class="t">Reportá un pozo</div>
-      <div class="d">Tocá "Reportar pozo" y marcá en el mapa dónde está. Elegís el tamaño y listo: 10 segundos, sin registrarte.</div>
+      <div class="d">Tocá directamente el lugar del mapa donde está el pozo (o usá el botón amarillo). Elegís el tamaño y listo: 10 segundos, sin registrarte.</div>
     </div>
   </div>
   <div class="paso">
@@ -769,8 +781,14 @@ function cancelarReporte(){
   document.querySelectorAll('.tamano').forEach(t=>t.classList.remove('sel'));
   document.getElementById('btnConfirmar').disabled=true;
 }
+let popupCerradoEn = 0;
+map.on('popupclose', function(){ popupCerradoEn = Date.now(); });
+
 map.on('click', async function(e){
-  if(!reportando) return;
+  // si el tap fue solo para cerrar la ficha de un pozo, no arrancar un reporte
+  if(Date.now() - popupCerradoEn < 350) return;
+  // tocar el mapa inicia el reporte directo, sin pasar por el botón
+  if(!reportando) iniciarReporte();
   nuevoLatLng = e.latlng;
   document.getElementById('muniDetectado').textContent = 'detectando…';
   document.getElementById('sheetTamano').classList.add('abierta');
