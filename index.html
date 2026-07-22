@@ -205,6 +205,24 @@
   .rk-num{text-align:right;flex-shrink:0}
   .rk-num .n{font-size:26px;font-weight:700;letter-spacing:-.03em;color:var(--reportado)}
   .rk-num .l{font-size:9px;color:var(--antracita-2);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+  .rk-acc{margin-bottom:12px}
+  .rk-acc summary{list-style:none;cursor:pointer}
+  .rk-acc summary::-webkit-details-marker{display:none}
+  .rk-acc[open] summary .rk-card{border-radius:22px 22px 0 0}
+  .rk-barrios{
+    background:rgba(255,255,255,.45);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    border:1px solid var(--glass-borde);border-top:none;
+    border-radius:0 0 22px 22px;
+    padding:6px 18px 10px;
+  }
+  .rk-barrio{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:9px 0;border-bottom:1px solid rgba(43,44,46,.07);
+    font-size:12.5px;color:var(--antracita-2);
+  }
+  .rk-barrio:last-child{border-bottom:none}
+  .rk-barrio b{color:var(--antracita);font-weight:600;text-align:right;flex-shrink:0}
   .rk-nota{
     margin-top:16px;font-size:12px;color:var(--antracita-2);line-height:1.65;
     background:var(--glass);
@@ -454,7 +472,7 @@
         <h1>Mapa de <span>Pozos</span></h1>
       </div>
       <div style="display:flex;align-items:center;gap:12px">
-        <div class="kpi"><b id="kpiActivos">0</b>pozos sin arreglar</div>
+        <div class="kpi"><b id="kpiActivos">0</b>reclamos sin arreglar</div>
         <button class="btn-ayuda" onclick="abrirAyuda()" title="Cómo funciona" aria-label="Cómo funciona">?</button>
       </div>
     </div>
@@ -488,10 +506,6 @@
     <div style="height:calc(74px + env(safe-area-inset-top))"></div>
     <div class="rk-titulo">Ranking de municipios</div>
     <div class="rk-sub">Se actualiza solo con cada reporte y cada arreglo confirmado.</div>
-    <div class="tipos" style="margin-bottom:14px">
-      <div class="tipo-btn sel" data-rk="pozo" onclick="elegirRkTipo('pozo')">🕳️ Pozos</div>
-      <div class="tipo-btn" data-rk="tierra" onclick="elegirRkTipo('tierra')">🟤 Calles de tierra</div>
-    </div>
     <div id="rkLista"></div>
     <div class="rk-nota">
       Cada dato de esta pantalla sale de los reportes del mapa: nadie lo carga a mano.
@@ -507,7 +521,7 @@
       <div class="logo-mark"></div>
       <h1>Mapa de <span>Pozos</span></h1>
     </div>
-    <div class="kpi"><b id="kpiActivos2">0</b>pozos sin arreglar</div>
+    <div class="kpi"><b id="kpiActivos2">0</b>reclamos sin arreglar</div>
   </div>
 </main>
 
@@ -681,7 +695,7 @@ function fichaHTML(p){
   return '<div class="ficha">'+
     '<span class="estado" style="background:'+COLORES[p.estado]+';color:'+TEXTO_ESTADO[p.estado]+'">'+etiquetas[p.estado]+'</span>'+
     diasTxt+
-    '<div class="meta">'+tipoInfo.nombre+' · '+tipoInfo.etiquetaFicha.toLowerCase()+': <b>'+tamanoBonito+'</b><br>Municipio: <b>'+p.municipio+'</b><br>Confirmaciones de vecinos: <b>'+p.confirmaciones+'</b></div>'+
+    '<div class="meta">'+tipoInfo.nombre+' · '+tipoInfo.etiquetaFicha.toLowerCase()+': <b>'+tamanoBonito+'</b><br>Municipio: <b>'+p.municipio+'</b>'+(p.barrio?' · '+p.barrio:'')+'<br>Confirmaciones de vecinos: <b>'+p.confirmaciones+'</b></div>'+
     botones+'</div>';
 }
 
@@ -785,20 +799,25 @@ async function cargarTodo(){
 }
 
 /* ============ NOMINATIM (municipio real) ============ */
-async function detectarMunicipio(lat,lng){
+async function detectarUbicacion(lat,lng){
   try{
-    const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+lat+'&lon='+lng+'&zoom=8&accept-language=es';
+    // zoom 14: la respuesta trae tanto el partido (county) como el barrio/localidad
+    const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+lat+'&lon='+lng+'&zoom=14&accept-language=es';
     const r = await fetch(url, {headers:{'Accept':'application/json'}});
     const j = await r.json();
     const a = j.address || {};
-    // Prioridad: nivel partido/municipio (county), no la localidad o el barrio.
-    // Así "Fátima" o "Parque Sakura" se registran bajo su partido real.
-    let m = a.county || a.state_district || a.municipality || a.city || a.town || a.village || 'Sin determinar';
-    // Normalizar: "Partido de Exaltación de la Cruz" -> "Exaltación de la Cruz"
-    m = m.replace(/^Partido (de la |del |de )?/i, '').trim();
-    return m || 'Sin determinar';
+    // REGLA DE RAIZ: municipio SOLO acepta niveles administrativos de
+    // partido/departamento. JAMAS cae a localidad o barrio: si no hay
+    // partido, queda "Sin determinar" y el dato local va a su columna.
+    let m = a.county || a.state_district || a.municipality || null;
+    if(m) m = m.replace(/^Partido (de la |del |de )?/i, '')
+               .replace(/^Departamento (de la |del |de )?/i, '').trim();
+    // BARRIO/LOCALIDAD: el nivel local, si existe
+    let b = a.suburb || a.neighbourhood || a.hamlet || a.village || a.town || a.city_district || a.city || null;
+    if(b && b === m) b = null;
+    return {municipio: m || 'Sin determinar', barrio: b};
   }catch(e){
-    return 'Sin determinar';
+    return {municipio:'Sin determinar', barrio:null};
   }
 }
 
@@ -842,7 +861,7 @@ async function votar(id,tipo){
 }
 
 /* ============ REPORTAR ============ */
-let reportando=false, nuevoLatLng=null, tamanoSel=null, muniPendiente=null, tipoSel='pozo';
+let reportando=false, nuevoLatLng=null, tamanoSel=null, muniPendiente=null, barrioPendiente=null, tipoSel='pozo';
 
 function renderTamanos(){
   const cfg = TIPOS[tipoSel];
@@ -872,7 +891,7 @@ function iniciarReporte(){
   document.getElementById('fabUbicacion').style.display='none';
 }
 function cancelarReporte(){
-  reportando=false; nuevoLatLng=null; tamanoSel=null; muniPendiente=null;
+  reportando=false; nuevoLatLng=null; tamanoSel=null; muniPendiente=null; barrioPendiente=null;
   document.body.classList.remove('reportando');
   document.getElementById('modoReporte').style.display='none';
   document.getElementById('fab').style.display='flex';
@@ -892,8 +911,9 @@ map.on('click', async function(e){
   nuevoLatLng = e.latlng;
   document.getElementById('muniDetectado').textContent = 'detectando…';
   document.getElementById('sheetTamano').classList.add('abierta');
-  muniPendiente = await detectarMunicipio(e.latlng.lat, e.latlng.lng);
-  document.getElementById('muniDetectado').textContent = muniPendiente;
+  const u = await detectarUbicacion(e.latlng.lat, e.latlng.lng);
+  muniPendiente = u.municipio; barrioPendiente = u.barrio;
+  document.getElementById('muniDetectado').textContent = u.municipio + (u.barrio ? ' · ' + u.barrio : '');
 });
 function elegirTamano(el){
   document.querySelectorAll('.tamano').forEach(t=>t.classList.remove('sel'));
@@ -907,7 +927,7 @@ async function confirmarReporte(){
   btn.disabled = true; btn.textContent = 'Publicando…';
   const nuevo = {
     lat:nuevoLatLng.lat, lng:nuevoLatLng.lng, tamano:tamanoSel, tipo:tipoSel,
-    municipio: muniPendiente || 'Sin determinar',
+    municipio: muniPendiente || 'Sin determinar', barrio: barrioPendiente,
     estado:'reportado', confirmaciones:1, device_id:DEVICE_ID
   };
   const r = await sb.from('pozos').insert(nuevo).select().single();
@@ -935,46 +955,59 @@ function miUbicacion(){
 }
 
 /* ============ RANKING ============ */
-let rkTipo = 'pozo';
-function elegirRkTipo(t){
-  rkTipo = t;
-  document.querySelectorAll('[data-rk]').forEach(function(b){
-    b.classList.toggle('sel', b.dataset.rk===t);
-  });
-  renderRanking();
-}
 function renderRanking(){
   const stats = {};
   for(const p of pozos){
-    if((p.tipo || 'pozo') !== rkTipo) continue;
-    if(!stats[p.municipio]) stats[p.municipio]={activos:0, masViejo:0, arreglos:[]};
-    const s = stats[p.municipio];
-    if(p.estado!=='arreglado'){
-      s.activos++;
+    const m = p.municipio || 'Sin determinar';
+    if(!stats[m]) stats[m] = {pozo:0, tierra:0, masViejo:0, arreglos:[], barrios:{}};
+    const s = stats[m];
+    const t = (p.tipo || 'pozo');
+    if(p.estado !== 'arreglado'){
+      s[t]++;
       s.masViejo = Math.max(s.masViejo, diasDesde(p.created_at));
+      const b = p.barrio || 'Sin barrio identificado';
+      if(!s.barrios[b]) s.barrios[b] = {pozo:0, tierra:0};
+      s.barrios[b][t]++;
     } else if(p.arreglado_at){
-      s.arreglos.push(Math.max(0,diasDesde(p.created_at)-diasDesde(p.arreglado_at)));
+      s.arreglos.push(Math.max(0, diasDesde(p.created_at)-diasDesde(p.arreglado_at)));
     }
   }
   const filas = Object.entries(stats)
     .map(function(par){
-      const s=par[1];
-      return {muni:par[0], activos:s.activos, masViejo:s.masViejo,
+      const s = par[1];
+      return {muni:par[0], pozo:s.pozo, tierra:s.tierra, total:s.pozo+s.tierra,
+        masViejo:s.masViejo, barrios:s.barrios,
         prom: s.arreglos.length ? Math.round(s.arreglos.reduce((a,b)=>a+b,0)/s.arreglos.length) : null};
     })
-    .sort((a,b)=>b.activos-a.activos || b.masViejo-a.masViejo);
+    .filter(f => f.total > 0)
+    .sort((a,b)=>b.total-a.total || b.masViejo-a.masViejo);
 
   document.getElementById('rkLista').innerHTML = filas.length ? filas.map(function(f,i){
-    return '<div class="rk-card">'+
+    const barrios = Object.entries(f.barrios)
+      .map(function(bp){ return {nombre:bp[0], pozo:bp[1].pozo, tierra:bp[1].tierra, total:bp[1].pozo+bp[1].tierra}; })
+      .sort((a,b)=>b.total-a.total);
+    const filasBarrios = barrios.map(function(b){
+      const partes = [];
+      if(b.pozo) partes.push(b.pozo+(b.pozo===1?' pozo':' pozos'));
+      if(b.tierra) partes.push(b.tierra+(b.tierra===1?' calle de tierra':' calles de tierra'));
+      return '<div class="rk-barrio"><span>'+b.nombre+'</span><b>'+partes.join(' · ')+'</b></div>';
+    }).join('');
+    const desglose = [];
+    if(f.pozo) desglose.push('🕳️ '+f.pozo+(f.pozo===1?' pozo':' pozos'));
+    if(f.tierra) desglose.push('🟤 '+f.tierra+(f.tierra===1?' calle de tierra':' calles de tierra'));
+    return '<details class="rk-acc"><summary><div class="rk-card" style="margin-bottom:0">'+
       '<div class="rk-pos">'+(i+1)+'</div>'+
       '<div class="rk-info">'+
         '<div class="rk-muni">'+f.muni+'</div>'+
-        '<div class="rk-detalle">'+(rkTipo==='tierra'?'Reclamo':'Pozo')+' más antiguo: <b>'+f.masViejo+' días</b> sin arreglar<br>'+
-        (f.prom!==null ? 'Tarda en promedio <b>'+f.prom+' días</b> en arreglar' : 'Todavía no arregló <b>ninguno</b>')+
+        '<div class="rk-detalle">'+desglose.join(' &nbsp; ')+'<br>'+
+        'Reclamo más antiguo: <b>'+f.masViejo+' días</b> sin arreglar'+
+        (f.prom!==null ? ' · arregla en <b>'+f.prom+' días</b> promedio' : '')+
         '</div></div>'+
-      '<div class="rk-num"><div class="n">'+f.activos+'</div><div class="l">activos</div></div>'+
-    '</div>';
-  }).join('') : '<div class="rk-sub">Todavía no hay '+(rkTipo==='tierra'?'calles de tierra reportadas':'pozos reportados')+'. Sé el primero desde el mapa.</div>';
+      '<div class="rk-num"><div class="n">'+f.total+'</div><div class="l">activos</div></div>'+
+    '</div></summary>'+
+    '<div class="rk-barrios">'+filasBarrios+'</div>'+
+    '</details>';
+  }).join('') : '<div class="rk-sub">Todavía no hay reclamos reportados. Sé el primero desde el mapa.</div>';
 }
 
 /* ============ UI ============ */
