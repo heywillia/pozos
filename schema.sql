@@ -45,3 +45,12 @@ create table public.feedback (
 );
 alter table public.feedback enable row level security;
 create policy "crear feedback" on public.feedback for insert with check (true);
+
+-- Tipos de reclamo: pozo o calle de tierra deteriorada
+alter table public.pozos
+  add column tipo text not null default 'pozo' check (tipo in ('pozo','tierra'));
+alter table public.pozos drop constraint pozos_tamano_check;
+alter table public.pozos add constraint pozos_tamano_check check (
+  (tipo = 'pozo'   and tamano in ('Chico','Mediano','Crater')) or
+  (tipo = 'tierra' and tamano in ('Deteriorada','Muy deteriorada','Intransitable'))
+);

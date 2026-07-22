@@ -800,25 +800,30 @@ async function cargarTodo(){
 
 /* ============ NOMINATIM (municipio real) ============ */
 async function detectarUbicacion(lat,lng){
+  let municipio=null, provincia=null, barrio=null;
+  // 1) FUENTE OFICIAL: API Georef del Estado argentino (IGN/INDEC).
+  //    Limites administrativos oficiales de todo el pais.
   try{
-    // zoom 14: la respuesta trae tanto el partido (county) como el barrio/localidad
-    const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+lat+'&lon='+lng+'&zoom=14&accept-language=es';
-    const r = await fetch(url, {headers:{'Accept':'application/json'}});
-    const j = await r.json();
-    const a = j.address || {};
-    // REGLA DE RAIZ: municipio SOLO acepta niveles administrativos de
-    // partido/departamento. JAMAS cae a localidad o barrio: si no hay
-    // partido, queda "Sin determinar" y el dato local va a su columna.
-    let m = a.county || a.state_district || a.municipality || null;
-    if(m) m = m.replace(/^Partido (de la |del |de )?/i, '')
-               .replace(/^Departamento (de la |del |de )?/i, '').trim();
-    // BARRIO/LOCALIDAD: el nivel local, si existe
-    let b = a.suburb || a.neighbourhood || a.hamlet || a.village || a.town || a.city_district || a.city || null;
-    if(b && b === m) b = null;
-    return {municipio: m || 'Sin determinar', barrio: b};
-  }catch(e){
-    return {municipio:'Sin determinar', barrio:null};
-  }
+    const r = await fetch('https://apis.datos.gob.ar/georef/api/ubicacion?lat='+lat+'&lon='+lng);
+    const u = ((await r.json()) || {}).ubicacion || {};
+    municipio = (u.municipio && u.municipio.nombre) || (u.departamento && u.departamento.nombre) || null;
+    provincia = (u.provincia && u.provincia.nombre) || null;
+  }catch(e){}
+  // 2) Nominatim (OSM): SOLO como referencia de barrio, y respaldo de
+  //    municipio unicamente si Georef no respondio (p.ej. sin internet a datos.gob.ar)
+  try{
+    const r2 = await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+lat+'&lon='+lng+'&zoom=14&accept-language=es',{headers:{'Accept':'application/json'}});
+    const a = ((await r2.json()) || {}).address || {};
+    barrio = a.suburb || a.neighbourhood || a.hamlet || a.village || a.town || a.city_district || null;
+    if(!municipio){
+      let m = a.county || a.state_district || a.municipality || null;
+      if(m) m = m.replace(/^Partido (de la |del |de )?/i,'').replace(/^Departamento (de la |del |de )?/i,'').trim();
+      municipio = m;
+    }
+    if(!provincia) provincia = a.state || null;
+  }catch(e){}
+  if(barrio && barrio === municipio) barrio = null;
+  return {municipio: municipio || 'Sin determinar', barrio: barrio, provincia: provincia};
 }
 
 /* ============ VOTAR ============ */
@@ -861,7 +866,7 @@ async function votar(id,tipo){
 }
 
 /* ============ REPORTAR ============ */
-let reportando=false, nuevoLatLng=null, tamanoSel=null, muniPendiente=null, barrioPendiente=null, tipoSel='pozo';
+let reportando=false, nuevoLatLng=null, tamanoSel=null, muniPendiente=null, barrioPendiente=null, provPendiente=null, tipoSel='pozo';
 
 function renderTamanos(){
   const cfg = TIPOS[tipoSel];
@@ -912,7 +917,7 @@ map.on('click', async function(e){
   document.getElementById('muniDetectado').textContent = 'detectando…';
   document.getElementById('sheetTamano').classList.add('abierta');
   const u = await detectarUbicacion(e.latlng.lat, e.latlng.lng);
-  muniPendiente = u.municipio; barrioPendiente = u.barrio;
+  muniPendiente = u.municipio; barrioPendiente = u.barrio; provPendiente = u.provincia;
   document.getElementById('muniDetectado').textContent = u.municipio + (u.barrio ? ' · ' + u.barrio : '');
 });
 function elegirTamano(el){
@@ -927,7 +932,7 @@ async function confirmarReporte(){
   btn.disabled = true; btn.textContent = 'Publicando…';
   const nuevo = {
     lat:nuevoLatLng.lat, lng:nuevoLatLng.lng, tamano:tamanoSel, tipo:tipoSel,
-    municipio: muniPendiente || 'Sin determinar', barrio: barrioPendiente,
+    municipio: muniPendiente || 'Sin determinar', barrio: barrioPendiente, provincia: provPendiente,
     estado:'reportado', confirmaciones:1, device_id:DEVICE_ID
   };
   const r = await sb.from('pozos').insert(nuevo).select().single();
@@ -965,7 +970,7 @@ function renderRanking(){
     if(p.estado !== 'arreglado'){
       s[t]++;
       s.masViejo = Math.max(s.masViejo, diasDesde(p.created_at));
-      const b = p.barrio || 'Sin barrio identificado';
+      const b = p.barrio || 'Zona rural o sin barrio';
       if(!s.barrios[b]) s.barrios[b] = {pozo:0, tierra:0};
       s.barrios[b][t]++;
     } else if(p.arreglado_at){
