@@ -10,6 +10,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.24.0/maplibre-gl.min.css">
 <style>
   :root{
     --pintura:#FEE440;
@@ -602,6 +603,9 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<!-- MapLibre 5.x: la 6 ya no trae bundle para <script> y exige WebGL2 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.24.0/maplibre-gl.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script>
@@ -626,12 +630,53 @@ const dia = 24*60*60*1000;
 const misVotos = new Set(); // se llena desde la base al iniciar
 
 /* ============ MAPA ============ */
-const map = L.map('map',{zoomControl:false}).setView([-34.6037,-58.3816], 12);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-  maxZoom:19,
-  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-}).addTo(map);
+// maxBounds/minZoom: recomendados por maplibre-gl-leaflet para que Leaflet y MapLibre no se desincronicen.
+// maxZoom explícito: la capa vectorial no lo define y markercluster lo necesita.
+const map = L.map('map',{
+  zoomControl:false, minZoom:3, maxZoom:19,
+  maxBounds:[[180,-Infinity],[-180,Infinity]], maxBoundsViscosity:1
+}).setView([-34.6037,-58.3816], 12);
 L.control.zoom({position:'topright'}).addTo(map);
+
+/* Mapa base: OpenFreeMap Positron (vectorial, gratis, sin API key).
+   La atribución (OpenFreeMap / OpenMapTiles / OpenStreetMap) la toma el plugin del propio estilo.
+   Respaldo: tiles raster de OpenStreetMap si no hay WebGL o si OpenFreeMap no responde. */
+function usarRespaldoOSM(){
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+}
+function soportaWebGL(){
+  try{
+    const c = document.createElement('canvas');
+    return !!(c.getContext('webgl2') || c.getContext('webgl'));
+  }catch(e){ return false; }
+}
+(function cargarMapaBase(){
+  if(!L.maplibreGL || !soportaWebGL()){ usarRespaldoOSM(); return; }
+  let base;
+  try{
+    base = L.maplibreGL({style:'https://tiles.openfreemap.org/styles/positron'}).addTo(map);
+  }catch(e){
+    console.warn('No se pudo iniciar el mapa vectorial, uso OSM', e);
+    if(base) map.removeLayer(base);
+    usarRespaldoOSM();
+    return;
+  }
+  // si falla antes de terminar la primera carga (estilo o tiles caídos), pasar a OSM;
+  // errores sueltos después de cargar los reintenta MapLibre solo
+  let resuelto = false;
+  const gl = base.getMaplibreMap();
+  gl.once('load', function(){ resuelto = true; });
+  gl.on('error', function(e){
+    if(resuelto) return;
+    resuelto = true;
+    console.warn('OpenFreeMap no respondió, uso OSM', e && e.error);
+    map.removeLayer(base);
+    usarRespaldoOSM();
+  });
+})();
 
 const COLORES = {reportado:'#F15BB5', verificado:'#9B5DE5', arreglado:'#00F5D4'};
 // texto sobre cada color de estado (aquamarine es claro: necesita antracita)
