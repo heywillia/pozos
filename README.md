@@ -25,6 +25,11 @@ ranking de municipios.
 
 - `index.html` — toda la app
 - `config.js` — URL y publishable key de Supabase (publicas, protegidas por RLS)
+- `ubicacion.js` — como se calcula y se muestra municipio/barrio (lo usan la app y la herramienta de reparacion)
+- `herramientas/reparar.html` — recalcula municipio/barrio/provincia de todos los reportes. No se publica
+  (`.vercelignore`); se usa en local: `python3 -m http.server 8000` desde el repo y abrir
+  `http://localhost:8000/herramientas/reparar.html`. Tiene modo "Simular" que no guarda nada
+- `.github/workflows/supabase-keepalive.yml` — consulta diaria para que Supabase (plan free) no se pause
 - `manifest.json` + `sw.js` + iconos — PWA instalable
 - `schema.sql` — el SQL que crea las tablas (referencia; ya esta corrido en Supabase)
 
@@ -33,6 +38,14 @@ ranking de municipios.
 - `pozos`: lat, lng, tamano, municipio, estado (reportado/verificado/arreglado),
   confirmaciones, fechas, device_id del creador
 - `votos`: un voto por dispositivo por pozo, garantizado por UNIQUE en la base
+
+## Municipios y barrios
+
+- Municipio y provincia salen de la API Georef oficial (IGN/INDEC). Nominatim (OSM) solo aporta el barrio,
+  y se descarta si OSM ubica el punto en otro partido (pasa cerca de los limites).
+- Georef devuelve cada comuna de CABA como "municipio": la app las muestra juntas como **CABA**
+  y la comuna va al lado del barrio ("La Paternal (Comuna 15)").
+- Al publicar, la app espera a que termine la deteccion; antes, publicar rapido guardaba "Sin determinar".
 
 ## Plan B del mapa base: CARTO con key gratis
 

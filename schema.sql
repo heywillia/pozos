@@ -54,3 +54,8 @@ alter table public.pozos add constraint pozos_tamano_check check (
   (tipo = 'pozo'   and tamano in ('Chico','Mediano','Crater')) or
   (tipo = 'tierra' and tamano in ('Deteriorada','Muy deteriorada','Intransitable'))
 );
+
+-- Columnas agregadas despues (reconstruido desde el codigo, verificar en Supabase antes de re-ejecutar):
+-- texto libre, pueden ser null
+-- alter table public.pozos add column barrio text;
+-- alter table public.pozos add column provincia text;

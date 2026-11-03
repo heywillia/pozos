@@ -8,6 +8,9 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
+<!-- abrir antes las conexiones a los servidores del mapa y de la base -->
+<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
+<link rel="preconnect" href="https://bnrfmusaofronwsveaay.supabase.co" crossorigin>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.24.0/maplibre-gl.min.css">
@@ -223,6 +226,14 @@
     font-size:12.5px;color:var(--antracita-2);
   }
   .rk-barrio:last-child{border-bottom:none}
+  .rk-barrio.sin-barrio span{font-style:italic}
+  .rk-sin-ubicar{opacity:.8}
+  .rk-sin-ubicar .rk-pos{background:rgba(43,44,46,.08);box-shadow:none;color:var(--antracita-2)}
+  .rk-reintentar{
+    margin-left:8px;border:none;border-radius:99px;padding:6px 14px;cursor:pointer;
+    font-size:12px;font-weight:700;color:var(--antracita);font-family:inherit;
+    background:linear-gradient(180deg,var(--pintura-suave),var(--pintura));
+  }
   .rk-barrio b{color:var(--antracita);font-weight:600;text-align:right;flex-shrink:0}
   .rk-nota{
     margin-top:16px;font-size:12px;color:var(--antracita-2);line-height:1.65;
@@ -473,7 +484,7 @@
         <h1>Mapa de <span>Pozos</span></h1>
       </div>
       <div style="display:flex;align-items:center;gap:12px">
-        <div class="kpi"><b id="kpiActivos">0</b>reclamos sin arreglar</div>
+        <div class="kpi"><b id="kpiActivos">—</b>reclamos sin arreglar</div>
         <button class="btn-ayuda" onclick="abrirAyuda()" title="Cómo funciona" aria-label="Cómo funciona">?</button>
       </div>
     </div>
@@ -522,7 +533,7 @@
       <div class="logo-mark"></div>
       <h1>Mapa de <span>Pozos</span></h1>
     </div>
-    <div class="kpi"><b id="kpiActivos2">0</b>reclamos sin arreglar</div>
+    <div class="kpi"><b id="kpiActivos2">—</b>reclamos sin arreglar</div>
   </div>
 </main>
 
@@ -606,8 +617,9 @@
 <!-- MapLibre 5.x: la 6 ya no trae bundle para <script> y exige WebGL2 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.24.0/maplibre-gl.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
+<script src="ubicacion.js"></script>
 <script>
 /* ============ SUPABASE ============ */
 const sb = supabase.createClient(window.APP_CONFIG.SUPABASE_URL, window.APP_CONFIG.SUPABASE_KEY);
@@ -670,7 +682,7 @@ function soportaWebGL(){
   const gl = base.getMaplibreMap();
   gl.once('load', function(){ resuelto = true; });
   gl.on('error', function(e){
-    if(resuelto) return;
+    if(resuelto){ console.warn('MapLibre:', e && e.error); return; }
     resuelto = true;
     console.warn('OpenFreeMap no respondió, uso OSM', e && e.error);
     map.removeLayer(base);
@@ -727,6 +739,7 @@ function fichaHTML(p){
   const etiquetas = {reportado:'Reportado', verificado:'Verificado', arreglado:'Arreglado'};
   const tipoInfo = TIPOS[p.tipo || 'pozo'];
   const tamanoBonito = p.tamano==='Crater' ? 'Cráter' : p.tamano;
+  const z = Ubicacion.zona(p);
   const diasTxt = p.estado==='arreglado' && p.arreglado_at
     ? '<div class="dias">'+Math.max(0,diasDesde(p.created_at)-diasDesde(p.arreglado_at))+'<small>días tardó el arreglo</small></div>'
     : '<div class="dias">'+diasDesde(p.created_at)+'<small>días sin arreglar</small></div>';
@@ -740,13 +753,13 @@ function fichaHTML(p){
   return '<div class="ficha">'+
     '<span class="estado" style="background:'+COLORES[p.estado]+';color:'+TEXTO_ESTADO[p.estado]+'">'+etiquetas[p.estado]+'</span>'+
     diasTxt+
-    '<div class="meta">'+tipoInfo.nombre+' · '+tipoInfo.etiquetaFicha.toLowerCase()+': <b>'+tamanoBonito+'</b><br>Municipio: <b>'+p.municipio+'</b>'+(p.barrio?' · '+p.barrio:'')+'<br>Confirmaciones de vecinos: <b>'+p.confirmaciones+'</b></div>'+
+    '<div class="meta">'+tipoInfo.nombre+' · '+tipoInfo.etiquetaFicha.toLowerCase()+': <b>'+tamanoBonito+'</b><br>Municipio: <b>'+z.municipio+'</b>'+(z.barrio?' · '+z.barrio:'')+'<br>Confirmaciones de vecinos: <b>'+p.confirmaciones+'</b></div>'+
     botones+'</div>';
 }
 
 function pintar(p){
   if(capas[p.id]) cluster.removeLayer(capas[p.id]);
-  if(filtroMuni && p.municipio !== filtroMuni){ delete capas[p.id]; return; }
+  if(filtroMuni && Ubicacion.zona(p).municipio !== filtroMuni){ delete capas[p.id]; return; }
   const m = L.marker([p.lat,p.lng],{icon:icono(p)});
   m.bindPopup(function(){return fichaHTML(p)},{closeButton:false});
   cluster.addLayer(m);
@@ -763,7 +776,8 @@ function repintarTodo(){
 function actualizarFiltroOpciones(){
   const sel = document.getElementById('filtroMuni');
   const actual = sel.value;
-  const munis = [...new Set(pozos.map(p=>p.municipio))].sort((a,b)=>a.localeCompare(b,'es'));
+  const munis = [...new Set(pozos.map(p=>Ubicacion.zona(p).municipio))]
+    .filter(m=>m!==Ubicacion.SIN_DATO).sort((a,b)=>a.localeCompare(b,'es'));
   sel.innerHTML = '<option value="">Todos los municipios</option>' +
     munis.map(m=>'<option value="'+m.replace(/"/g,'&quot;')+'">'+m+'</option>').join('');
   if(munis.includes(actual)) sel.value = actual;
@@ -771,7 +785,7 @@ function actualizarFiltroOpciones(){
 function aplicarFiltro(v){
   filtroMuni = v;
   repintarTodo();
-  const visibles = pozos.filter(p=>!filtroMuni || p.municipio===filtroMuni);
+  const visibles = pozos.filter(p=>!filtroMuni || Ubicacion.zona(p).municipio===filtroMuni);
   if(visibles.length && cluster.getLayers().length){
     map.fitBounds(cluster.getBounds().pad(0.2));
   }
@@ -786,7 +800,8 @@ async function compartirPozo(id){
   const desc = (p.tipo==='tierra')
     ? 'Calle de tierra '+p.tamano.toLowerCase()
     : 'Pozo '+(p.tamano==='Crater'?'cráter':p.tamano.toLowerCase());
-  const texto = desc+' en '+p.municipio+
+  const z = Ubicacion.zona(p);
+  const texto = desc+' en '+(z.barrio ? z.barrio+', ' : '')+z.municipio+
     ', hace '+diasDesde(p.created_at)+' días sin arreglar. Entrá y confirmalo así queda verificado:';
   if(navigator.share){
     try{ await navigator.share({title:'Mapa de Pozos', text:texto, url:url}); }catch(e){}
@@ -818,15 +833,25 @@ function actualizarKPI(){
 }
 
 /* ============ CARGA INICIAL ============ */
+let cargaFallida = false;
+async function consultarPozos(){
+  const [rPozos, rVotos] = await Promise.all([
+    sb.from('pozos').select('*'),
+    sb.from('votos').select('pozo_id').eq('device_id', DEVICE_ID)
+  ]);
+  if(rPozos.error) throw rPozos.error;
+  return [rPozos.data || [], rVotos.data || []];
+}
 async function cargarTodo(){
+  document.getElementById('cargando').classList.remove('oculto');
   try{
-    const [rPozos, rVotos] = await Promise.all([
-      sb.from('pozos').select('*'),
-      sb.from('votos').select('pozo_id').eq('device_id', DEVICE_ID)
-    ]);
-    if(rPozos.error) throw rPozos.error;
-    pozos = rPozos.data || [];
-    (rVotos.data || []).forEach(v => misVotos.add(v.pozo_id));
+    let datos;
+    // un reintento silencioso: las fallas de red cortas no deberían llegar al usuario
+    try{ datos = await consultarPozos(); }
+    catch(e){ await new Promise(r=>setTimeout(r,2500)); datos = await consultarPozos(); }
+    cargaFallida = false;
+    pozos = datos[0];
+    datos[1].forEach(v => misVotos.add(v.pozo_id));
     repintarTodo();
     actualizarFiltroOpciones();
     actualizarKPI();
@@ -837,38 +862,12 @@ async function cargarTodo(){
     }
   }catch(e){
     console.error(e);
-    toast('No se pudieron cargar los pozos. Revisá tu conexión.');
+    cargaFallida = true;
+    renderRanking();
+    toast('No se pudieron cargar los reclamos', 6000);
   }finally{
     document.getElementById('cargando').classList.add('oculto');
   }
-}
-
-/* ============ NOMINATIM (municipio real) ============ */
-async function detectarUbicacion(lat,lng){
-  let municipio=null, provincia=null, barrio=null;
-  // 1) FUENTE OFICIAL: API Georef del Estado argentino (IGN/INDEC).
-  //    Limites administrativos oficiales de todo el pais.
-  try{
-    const r = await fetch('https://apis.datos.gob.ar/georef/api/ubicacion?lat='+lat+'&lon='+lng);
-    const u = ((await r.json()) || {}).ubicacion || {};
-    municipio = (u.municipio && u.municipio.nombre) || (u.departamento && u.departamento.nombre) || null;
-    provincia = (u.provincia && u.provincia.nombre) || null;
-  }catch(e){}
-  // 2) Nominatim (OSM): SOLO como referencia de barrio, y respaldo de
-  //    municipio unicamente si Georef no respondio (p.ej. sin internet a datos.gob.ar)
-  try{
-    const r2 = await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+lat+'&lon='+lng+'&zoom=14&accept-language=es',{headers:{'Accept':'application/json'}});
-    const a = ((await r2.json()) || {}).address || {};
-    barrio = a.suburb || a.neighbourhood || a.hamlet || a.village || a.town || a.city_district || null;
-    if(!municipio){
-      let m = a.county || a.state_district || a.municipality || null;
-      if(m) m = m.replace(/^Partido (de la |del |de )?/i,'').replace(/^Departamento (de la |del |de )?/i,'').trim();
-      municipio = m;
-    }
-    if(!provincia) provincia = a.state || null;
-  }catch(e){}
-  if(barrio && barrio === municipio) barrio = null;
-  return {municipio: municipio || 'Sin determinar', barrio: barrio, provincia: provincia};
 }
 
 /* ============ VOTAR ============ */
@@ -911,7 +910,9 @@ async function votar(id,tipo){
 }
 
 /* ============ REPORTAR ============ */
-let reportando=false, nuevoLatLng=null, tamanoSel=null, muniPendiente=null, barrioPendiente=null, provPendiente=null, tipoSel='pozo';
+let reportando=false, nuevoLatLng=null, tamanoSel=null, tipoSel='pozo';
+// ubicación del último toque (promesa): al publicar se espera a que termine, nunca se guarda a medias
+let ubicacionPendiente=null;
 
 function renderTamanos(){
   const cfg = TIPOS[tipoSel];
@@ -941,7 +942,7 @@ function iniciarReporte(){
   document.getElementById('fabUbicacion').style.display='none';
 }
 function cancelarReporte(){
-  reportando=false; nuevoLatLng=null; tamanoSel=null; muniPendiente=null; barrioPendiente=null;
+  reportando=false; nuevoLatLng=null; tamanoSel=null; ubicacionPendiente=null;
   document.body.classList.remove('reportando');
   document.getElementById('modoReporte').style.display='none';
   document.getElementById('fab').style.display='flex';
@@ -961,9 +962,11 @@ map.on('click', async function(e){
   nuevoLatLng = e.latlng;
   document.getElementById('muniDetectado').textContent = 'detectando…';
   document.getElementById('sheetTamano').classList.add('abierta');
-  const u = await detectarUbicacion(e.latlng.lat, e.latlng.lng);
-  muniPendiente = u.municipio; barrioPendiente = u.barrio; provPendiente = u.provincia;
-  document.getElementById('muniDetectado').textContent = u.municipio + (u.barrio ? ' · ' + u.barrio : '');
+  const det = ubicacionPendiente = Ubicacion.detectar(e.latlng.lat, e.latlng.lng);
+  const u = await det;
+  if(det !== ubicacionPendiente) return; // hubo otro toque más nuevo
+  const z = Ubicacion.zona(u);
+  document.getElementById('muniDetectado').textContent = z.municipio + (z.barrio ? ' · ' + z.barrio : '');
 });
 function elegirTamano(el){
   document.querySelectorAll('.tamano').forEach(t=>t.classList.remove('sel'));
@@ -972,12 +975,15 @@ function elegirTamano(el){
   document.getElementById('btnConfirmar').disabled=false;
 }
 async function confirmarReporte(){
-  if(!nuevoLatLng || !tamanoSel) return;
+  if(!nuevoLatLng || !tamanoSel || !ubicacionPendiente) return;
   const btn = document.getElementById('btnConfirmar');
   btn.disabled = true; btn.textContent = 'Publicando…';
+  const latlng = nuevoLatLng, det = ubicacionPendiente;
+  const u = await det; // si todavía estaba detectando el municipio, esperarlo
+  if(det !== ubicacionPendiente){ btn.textContent = 'Publicar reporte'; btn.disabled = !tamanoSel; return; } // canceló o tocó otro punto
   const nuevo = {
-    lat:nuevoLatLng.lat, lng:nuevoLatLng.lng, tamano:tamanoSel, tipo:tipoSel,
-    municipio: muniPendiente || 'Sin determinar', barrio: barrioPendiente, provincia: provPendiente,
+    lat:latlng.lat, lng:latlng.lng, tamano:tamanoSel, tipo:tipoSel,
+    municipio: u.municipio, barrio: u.barrio, provincia: u.provincia,
     estado:'reportado', confirmaciones:1, device_id:DEVICE_ID
   };
   const r = await sb.from('pozos').insert(nuevo).select().single();
@@ -992,7 +998,7 @@ async function confirmarReporte(){
   actualizarFiltroOpciones();
   cancelarReporte();
   actualizarKPI(); renderRanking();
-  toast((tipoSel==='tierra'?'Calle de tierra reportada':'Pozo reportado')+' en '+r.data.municipio);
+  toast((tipoSel==='tierra'?'Calle de tierra reportada':'Pozo reportado')+' en '+Ubicacion.zona(r.data).municipio);
 }
 
 /* ============ MI UBICACIÓN ============ */
@@ -1005,19 +1011,28 @@ function miUbicacion(){
 }
 
 /* ============ RANKING ============ */
+const SIN_BARRIO = 'Sin barrio identificado';
 function renderRanking(){
+  const lista = document.getElementById('rkLista');
+  if(cargaFallida){
+    lista.innerHTML = '<div class="rk-sub">No pudimos cargar los reclamos.'+
+      '<button class="rk-reintentar" onclick="cargarTodo()">Reintentar</button></div>';
+    return;
+  }
   const stats = {};
   for(const p of pozos){
-    const m = p.municipio || 'Sin determinar';
-    if(!stats[m]) stats[m] = {pozo:0, tierra:0, masViejo:0, arreglos:[], barrios:{}};
-    const s = stats[m];
+    const z = Ubicacion.zona(p);
+    if(!stats[z.municipio]) stats[z.municipio] = {pozo:0, tierra:0, masViejo:0, arreglos:[], barrios:{}};
+    const s = stats[z.municipio];
     const t = (p.tipo || 'pozo');
     if(p.estado !== 'arreglado'){
       s[t]++;
       s.masViejo = Math.max(s.masViejo, diasDesde(p.created_at));
-      const b = p.barrio || 'Zona rural o sin barrio';
-      if(!s.barrios[b]) s.barrios[b] = {pozo:0, tierra:0};
-      s.barrios[b][t]++;
+      // variantes del mismo barrio ("Barrio Parque El Remanso" / "El Remanso") se cuentan juntas
+      const k = z.barrio ? Ubicacion.claveBarrio(z.barrio) : '';
+      if(!s.barrios[k]) s.barrios[k] = {nombres:{}, pozo:0, tierra:0};
+      s.barrios[k][t]++;
+      if(z.barrio) s.barrios[k].nombres[z.barrio] = (s.barrios[k].nombres[z.barrio] || 0) + 1;
     } else if(p.arreglado_at){
       s.arreglos.push(Math.max(0, diasDesde(p.created_at)-diasDesde(p.arreglado_at)));
     }
@@ -1031,16 +1046,27 @@ function renderRanking(){
     })
     .filter(f => f.total > 0)
     .sort((a,b)=>b.total-a.total || b.masViejo-a.masViejo);
+  // los reclamos sin municipio no compiten en el ranking: van al final, sin puesto
+  const sinUbicar = filas.find(f => f.muni === Ubicacion.SIN_DATO);
+  const ranking = filas.filter(f => f !== sinUbicar);
 
-  document.getElementById('rkLista').innerHTML = filas.length ? filas.map(function(f,i){
+  function cantidades(f){
+    const partes = [];
+    if(f.pozo) partes.push(f.pozo+(f.pozo===1?' pozo':' pozos'));
+    if(f.tierra) partes.push(f.tierra+(f.tierra===1?' calle de tierra':' calles de tierra'));
+    return partes.join(' · ');
+  }
+  function tarjeta(f, i){
+    // barrios con nombre primero (de más a menos reclamos); los sin barrio, al final
     const barrios = Object.entries(f.barrios)
-      .map(function(bp){ return {nombre:bp[0], pozo:bp[1].pozo, tierra:bp[1].tierra, total:bp[1].pozo+bp[1].tierra}; })
-      .sort((a,b)=>b.total-a.total);
+      .map(function(bp){
+        const nombres = Object.entries(bp[1].nombres).sort((a,b)=>b[1]-a[1]);
+        return {nombre: bp[0] ? nombres[0][0] : SIN_BARRIO, sinBarrio: !bp[0],
+                pozo:bp[1].pozo, tierra:bp[1].tierra, total:bp[1].pozo+bp[1].tierra};
+      })
+      .sort((a,b)=>(a.sinBarrio-b.sinBarrio) || b.total-a.total || a.nombre.localeCompare(b.nombre,'es'));
     const filasBarrios = barrios.map(function(b){
-      const partes = [];
-      if(b.pozo) partes.push(b.pozo+(b.pozo===1?' pozo':' pozos'));
-      if(b.tierra) partes.push(b.tierra+(b.tierra===1?' calle de tierra':' calles de tierra'));
-      return '<div class="rk-barrio"><span>'+b.nombre+'</span><b>'+partes.join(' · ')+'</b></div>';
+      return '<div class="rk-barrio'+(b.sinBarrio?' sin-barrio':'')+'"><span>'+b.nombre+'</span><b>'+cantidades(b)+'</b></div>';
     }).join('');
     const desglose = [];
     if(f.pozo) desglose.push('🕳️ '+f.pozo+(f.pozo===1?' pozo':' pozos'));
@@ -1057,7 +1083,18 @@ function renderRanking(){
     '</div></summary>'+
     '<div class="rk-barrios">'+filasBarrios+'</div>'+
     '</details>';
-  }).join('') : '<div class="rk-sub">Todavía no hay reclamos reportados. Sé el primero desde el mapa.</div>';
+  }
+
+  if(!filas.length){
+    lista.innerHTML = '<div class="rk-sub">Todavía no hay reclamos reportados. Sé el primero desde el mapa.</div>';
+    return;
+  }
+  lista.innerHTML = ranking.map(tarjeta).join('') + (sinUbicar ?
+    '<div class="rk-card rk-sin-ubicar">'+
+      '<div class="rk-pos">?</div>'+
+      '<div class="rk-info"><div class="rk-muni">Sin municipio identificado</div>'+
+      '<div class="rk-detalle">'+cantidades(sinUbicar)+' que todavía no pudimos ubicar en un municipio. No cuentan para el ranking.</div></div>'+
+    '</div>' : '');
 }
 
 /* ============ UI ============ */
@@ -1071,11 +1108,11 @@ function irA(v){
   if(v==='ranking') renderRanking();
 }
 let toastTimer;
-function toast(msg){
+function toast(msg, ms){
   const t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('ver');
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(function(){t.classList.remove('ver')},2600);
+  toastTimer=setTimeout(function(){t.classList.remove('ver')}, ms || 2600);
 }
 
 /* ============ FEEDBACK ============ */

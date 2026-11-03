@@ -1,8 +1,8 @@
-// Service worker v2
-// - HTML y config: RED PRIMERO (siempre la última versión; cache solo como respaldo offline)
+// Service worker v3
+// - HTML y JS propio (config, ubicacion): RED PRIMERO (siempre la última versión; cache solo como respaldo offline)
 // - Íconos y manifest: cache primero (no cambian seguido)
-const CACHE = 'mapa-pozos-v2';
-const ASSETS = ['./', './index.html', './config.js', './manifest.json', './icon-192.png', './icon-512.png'];
+const CACHE = 'mapa-pozos-v3';
+const ASSETS = ['./', './index.html', './config.js', './ubicacion.js', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
@@ -23,7 +23,7 @@ self.addEventListener('fetch', e => {
   const esHTML = e.request.mode === 'navigate' ||
                  url.pathname.endsWith('/') ||
                  url.pathname.endsWith('index.html') ||
-                 url.pathname.endsWith('config.js');
+                 url.pathname.endsWith('.js');
 
   if (esHTML) {
     // red primero: si hay internet, siempre la versión nueva
