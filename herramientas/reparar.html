@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reparación de datos — Mapa de Pozos</title>
+<style>
+  body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#F5F4F1;color:#2B2C2E;
+       max-width:680px;margin:0 auto;padding:32px 20px}
+  h1{font-size:20px;margin-bottom:6px}
+  p{font-size:13.5px;color:#5A5B5E;line-height:1.6;margin-bottom:16px}
+  .botones{display:flex;gap:10px;flex-wrap:wrap}
+  button{background:linear-gradient(180deg,#FFF178,#FEE440);color:#2B2C2E;border:none;
+         border-radius:14px;padding:14px 22px;font-size:15px;font-weight:700;cursor:pointer}
+  button.sec{background:#e4e3df}
+  button:disabled{opacity:.4}
+  #log{margin-top:20px;background:#2B2C2E;color:#d8d8dc;border-radius:14px;padding:14px;
+       font:11.5px/1.7 ui-monospace,Menlo,monospace;height:380px;overflow-y:auto;white-space:pre-wrap}
+  .ok{color:#00F5D4}.warn{color:#FEE440}.err{color:#F15BB5}
+  #barra{height:8px;background:#e4e3df;border-radius:99px;margin-top:14px;overflow:hidden}
+  #barraFill{height:100%;width:0%;background:#FEE440;transition:width .3s}
+</style>
+</head>
+<body>
+<h1>🛠️ Reparación de datos</h1>
+<p>Vuelve a calcular municipio, provincia y barrio de <b>todos</b> los reportes con la misma lógica que usa la app
+(<code>ubicacion.js</code>): municipio y provincia de la API Georef oficial (IGN/INDEC), barrio de OpenStreetMap
+solo si coincide con el partido oficial. <b>Nunca toca</b> estado, votos ni fechas.
+Si una API no responde, ese dato queda como estaba.</p>
+<p>Primero corré <b>Simular</b>: muestra qué cambiaría sin guardar nada. Tarda ~1,5 s por reporte
+(respeta el límite de 1 consulta por segundo de Nominatim): dejá la pestaña abierta.</p>
+<p>Esta página no se publica en Vercel (ver <code>.vercelignore</code>). Para usarla, desde la carpeta del repo:
+<code>python3 -m http.server 8000</code> y abrir <code>http://localhost:8000/herramientas/reparar.html</code>.</p>
+<div class="botones">
+  <button class="sec" id="btnSimular" onclick="correr(false)">Simular (no guarda nada)</button>
+  <button id="btnReparar" onclick="correr(true)">Reparar toda la base</button>
+</div>
+<div id="barra"><div id="barraFill"></div></div>
+<div id="log">Listo para empezar.</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js"></script>
+<script src="../config.js"></script>
+<script src="../ubicacion.js"></script>
+<script>
+const sb = supabase.createClient(window.APP_CONFIG.SUPABASE_URL, window.APP_CONFIG.SUPABASE_KEY);
+const logEl = document.getElementById('log');
+function log(msg, clase){
+  const linea = document.createElement('div');
+  if(clase) linea.className = clase;
+  linea.textContent = msg;
+  logEl.appendChild(linea);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+const dormir = ms => new Promise(r => setTimeout(r, ms));
+const mostrar = v => v == null ? '∅' : v;
+
+// cambios a aplicar en un reporte según la ubicación recalculada
+function calcularCambios(p, u){
+  const cambios = {};
+  // municipio y provincia solo desde la fuente oficial; si Georef no respondió, no se tocan
+  if(u.fuente === 'georef'){
+    if(u.municipio !== p.municipio) cambios.municipio = u.municipio;
+    if(u.provincia && u.provincia !== p.provincia) cambios.provincia = u.provincia;
+  }
+  // barrio solo si Nominatim respondió (si no, queda el que estaba)
+  if(u.osmOk && (u.barrio || null) !== (p.barrio || null)) cambios.barrio = u.barrio || null;
+  return cambios;
+}
+
+window.__resultados = [];
+async function correr(guardar){
+  if(guardar && !confirm('Esto va a modificar municipio/barrio/provincia en la base. ¿Seguir?')) return;
+  document.getElementById('btnSimular').disabled = true;
+  document.getElementById('btnReparar').disabled = true;
+  logEl.textContent = '';
+  window.__resultados = [];
+  log((guardar ? 'REPARANDO' : 'SIMULANDO (no se guarda nada)') + ' — descargando reportes…', 'warn');
+  const {data: filas, error} = await sb.from('pozos').select('id,lat,lng,municipio,barrio,provincia').order('id');
+  if(error){ log('ERROR al leer la base: '+error.message, 'err'); habilitar(); return; }
+  log(filas.length + ' reportes encontrados.\n');
+
+  let conCambios = 0, sinCambio = 0, fallidos = 0;
+  for(let i = 0; i < filas.length; i++){
+    const p = filas[i];
+    document.getElementById('barraFill').style.width = Math.round((i+1)/filas.length*100)+'%';
+    try{
+      const u = await Ubicacion.detectar(p.lat, p.lng);
+      const cambios = calcularCambios(p, u);
+      window.__resultados.push({id:p.id, antes:{municipio:p.municipio, barrio:p.barrio, provincia:p.provincia}, cambios:cambios, fuente:u.fuente, osmOk:u.osmOk});
+      if(Object.keys(cambios).length){
+        if(guardar){
+          // solo columnas de ubicación: nunca estado, votos ni fechas
+          const {error: e2} = await sb.from('pozos').update(cambios).eq('id', p.id);
+          if(e2) throw e2;
+        }
+        conCambios++;
+        log('#'+p.id+'  '+Object.keys(cambios).map(k => k+': '+mostrar(p[k])+' → '+mostrar(cambios[k])).join('  ·  '), 'ok');
+      } else {
+        sinCambio++;
+        if(!u.fuente || !u.osmOk) log('#'+p.id+' sin cambios (respondió '+(u.fuente ? 'Georef' : 'ni Georef')+', '+(u.osmOk ? 'OSM' : 'no OSM')+')', 'warn');
+      }
+    }catch(e){
+      fallidos++;
+      log('#'+p.id+' FALLÓ: '+(e.message || e), 'err');
+    }
+    await dormir(1100); // Nominatim: máximo 1 consulta por segundo
+  }
+  log('\n════════════════════════════', 'warn');
+  log((guardar ? 'Corregidos: ' : 'Cambiarían: ')+conCambios+' · Sin cambios: '+sinCambio+' · Fallidos: '+fallidos, 'warn');
+  if(guardar) log(fallidos ? 'Volvé a correrla para reintentar los fallidos.' : '✅ Base reparada. Podés cerrar esta pestaña.', 'warn');
+  window.__terminado = true;
+  habilitar();
+}
+function habilitar(){
+  document.getElementById('btnSimular').disabled = false;
+  document.getElementById('btnReparar').disabled = false;
+}
+</script>
+</body>
+</html>
