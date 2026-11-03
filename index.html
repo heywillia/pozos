@@ -204,6 +204,7 @@
   }
   .rk-info{flex:1;min-width:0}
   .rk-muni{font-size:15.5px;font-weight:700;letter-spacing:-.02em;color:var(--antracita)}
+  .rk-prov{display:block;font-size:11px;font-weight:500;letter-spacing:0;color:var(--antracita-2);margin:1px 0 2px}
   .rk-detalle{font-size:11.5px;color:var(--antracita-2);margin-top:4px;line-height:1.55}
   .rk-detalle b{color:var(--antracita);font-weight:600}
   .rk-num{text-align:right;flex-shrink:0}
@@ -753,13 +754,13 @@ function fichaHTML(p){
   return '<div class="ficha">'+
     '<span class="estado" style="background:'+COLORES[p.estado]+';color:'+TEXTO_ESTADO[p.estado]+'">'+etiquetas[p.estado]+'</span>'+
     diasTxt+
-    '<div class="meta">'+tipoInfo.nombre+' · '+tipoInfo.etiquetaFicha.toLowerCase()+': <b>'+tamanoBonito+'</b><br>Municipio: <b>'+z.municipio+'</b>'+(z.barrio?' · '+z.barrio:'')+'<br>Confirmaciones de vecinos: <b>'+p.confirmaciones+'</b></div>'+
+    '<div class="meta">'+tipoInfo.nombre+' · '+tipoInfo.etiquetaFicha.toLowerCase()+': <b>'+tamanoBonito+'</b><br>'+(z.rural?'Zona':'Municipio')+': <b>'+z.municipio+'</b>'+(z.barrio?' · '+z.barrio:'')+'<br>Confirmaciones de vecinos: <b>'+p.confirmaciones+'</b></div>'+
     botones+'</div>';
 }
 
 function pintar(p){
   if(capas[p.id]) cluster.removeLayer(capas[p.id]);
-  if(filtroMuni && Ubicacion.zona(p).municipio !== filtroMuni){ delete capas[p.id]; return; }
+  if(filtroMuni && Ubicacion.zona(p).clave !== filtroMuni){ delete capas[p.id]; return; }
   const m = L.marker([p.lat,p.lng],{icon:icono(p)});
   m.bindPopup(function(){return fichaHTML(p)},{closeButton:false});
   cluster.addLayer(m);
@@ -776,20 +777,27 @@ function repintarTodo(){
 function actualizarFiltroOpciones(){
   const sel = document.getElementById('filtroMuni');
   const actual = sel.value;
-  const munis = [...new Set(pozos.map(p=>Ubicacion.zona(p).municipio))]
-    .filter(m=>m!==Ubicacion.SIN_DATO).sort((a,b)=>a.localeCompare(b,'es'));
+  // una opción por municipio+provincia; la provincia se agrega solo si el nombre se repite
+  const zonas = {};
+  pozos.forEach(function(p){ const z = Ubicacion.zona(p); if(z.clave !== Ubicacion.SIN_DATO) zonas[z.clave] = z; });
+  const lista = Object.values(zonas);
+  const repetidos = new Set(lista.map(z=>z.municipio).filter((m,i,a)=>a.indexOf(m)!==i));
+  const opciones = lista.map(function(z){
+    return {valor:z.clave, texto:z.municipio + (repetidos.has(z.municipio) && z.provincia ? ' ('+z.provincia+')' : '')};
+  }).sort((a,b)=>a.texto.localeCompare(b.texto,'es'));
   sel.innerHTML = '<option value="">Todos los municipios</option>' +
-    munis.map(m=>'<option value="'+m.replace(/"/g,'&quot;')+'">'+m+'</option>').join('');
-  if(munis.includes(actual)) sel.value = actual;
+    opciones.map(o=>'<option value="'+o.valor.replace(/"/g,'&quot;')+'">'+o.texto+'</option>').join('');
+  if(zonas[actual]) sel.value = actual;
 }
 function aplicarFiltro(v){
   filtroMuni = v;
   repintarTodo();
-  const visibles = pozos.filter(p=>!filtroMuni || Ubicacion.zona(p).municipio===filtroMuni);
+  const visibles = pozos.filter(p=>!filtroMuni || Ubicacion.zona(p).clave===filtroMuni);
   if(visibles.length && cluster.getLayers().length){
     map.fitBounds(cluster.getBounds().pad(0.2));
   }
-  toast(v ? 'Mostrando: '+v : 'Mostrando todos los municipios');
+  const sel = document.getElementById('filtroMuni');
+  toast(v ? 'Mostrando: '+sel.options[sel.selectedIndex].text : 'Mostrando todos los municipios');
 }
 
 /* ============ COMPARTIR POZO ============ */
@@ -851,6 +859,7 @@ async function cargarTodo(){
     catch(e){ await new Promise(r=>setTimeout(r,2500)); datos = await consultarPozos(); }
     cargaFallida = false;
     pozos = datos[0];
+    Ubicacion.completarProvincias(pozos);
     datos[1].forEach(v => misVotos.add(v.pozo_id));
     repintarTodo();
     actualizarFiltroOpciones();
@@ -1022,8 +1031,8 @@ function renderRanking(){
   const stats = {};
   for(const p of pozos){
     const z = Ubicacion.zona(p);
-    if(!stats[z.municipio]) stats[z.municipio] = {pozo:0, tierra:0, masViejo:0, arreglos:[], barrios:{}};
-    const s = stats[z.municipio];
+    if(!stats[z.clave]) stats[z.clave] = {zona:z, pozo:0, tierra:0, masViejo:0, arreglos:[], barrios:{}};
+    const s = stats[z.clave];
     const t = (p.tipo || 'pozo');
     if(p.estado !== 'arreglado'){
       s[t]++;
@@ -1040,14 +1049,14 @@ function renderRanking(){
   const filas = Object.entries(stats)
     .map(function(par){
       const s = par[1];
-      return {muni:par[0], pozo:s.pozo, tierra:s.tierra, total:s.pozo+s.tierra,
+      return {clave:par[0], muni:s.zona.municipio, provincia:s.zona.provincia, pozo:s.pozo, tierra:s.tierra, total:s.pozo+s.tierra,
         masViejo:s.masViejo, barrios:s.barrios,
         prom: s.arreglos.length ? Math.round(s.arreglos.reduce((a,b)=>a+b,0)/s.arreglos.length) : null};
     })
     .filter(f => f.total > 0)
     .sort((a,b)=>b.total-a.total || b.masViejo-a.masViejo);
   // los reclamos sin municipio no compiten en el ranking: van al final, sin puesto
-  const sinUbicar = filas.find(f => f.muni === Ubicacion.SIN_DATO);
+  const sinUbicar = filas.find(f => f.clave === Ubicacion.SIN_DATO);
   const ranking = filas.filter(f => f !== sinUbicar);
 
   function cantidades(f){
@@ -1074,7 +1083,7 @@ function renderRanking(){
     return '<details class="rk-acc"><summary><div class="rk-card" style="margin-bottom:0">'+
       '<div class="rk-pos">'+(i+1)+'</div>'+
       '<div class="rk-info">'+
-        '<div class="rk-muni">'+f.muni+'</div>'+
+        '<div class="rk-muni">'+f.muni+(f.provincia ? ' <span class="rk-prov">'+f.provincia+'</span>' : '')+'</div>'+
         '<div class="rk-detalle">'+desglose.join(' &nbsp; ')+'<br>'+
         'Reclamo más antiguo: <b>'+f.masViejo+' días</b> sin arreglar'+
         (f.prom!==null ? ' · arregla en <b>'+f.prom+' días</b> promedio' : '')+

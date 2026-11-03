@@ -41,8 +41,12 @@ ranking de municipios.
 
 ## Municipios y barrios
 
-- Municipio y provincia salen de la API Georef oficial (IGN/INDEC). Nominatim (OSM) solo aporta el barrio,
-  y se descarta si OSM ubica el punto en otro partido (pasa cerca de los limites).
+- Municipio y provincia salen de la API Georef oficial (IGN/INDEC). Nominatim (OSM) aporta el barrio,
+  y se descarta si OSM ubica el punto en otro partido/departamento (pasa cerca de los limites).
+- Georef no tiene municipio para todo el pais (ej. Puerto Deseado, comunas rurales de Cordoba). En ese caso
+  se usa el gobierno local o la localidad de OSM, si cae en el mismo departamento oficial; si no hay nada,
+  queda "Departamento (zona rural)" (ej. "Martires (zona rural)"), porque ahi no hay municipio.
+- El ranking agrupa por municipio + provincia: hay nombres repetidos ("Pilar" en Buenos Aires y en Cordoba).
 - Georef devuelve cada comuna de CABA como "municipio": la app las muestra juntas como **CABA**
   y la comuna va al lado del barrio ("La Paternal (Comuna 15)").
 - Al publicar, la app espera a que termine la deteccion; antes, publicar rapido guardaba "Sin determinar".

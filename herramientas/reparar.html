@@ -57,11 +57,11 @@ const mostrar = v => v == null ? '∅' : v;
 // cambios a aplicar en un reporte según la ubicación recalculada
 function calcularCambios(p, u){
   const cambios = {};
-  // municipio y provincia solo desde la fuente oficial; si Georef no respondió, no se tocan
-  if(u.fuente === 'georef'){
-    if(u.municipio !== p.municipio) cambios.municipio = u.municipio;
-    if(u.provincia && u.provincia !== p.provincia) cambios.provincia = u.provincia;
-  }
+  // Solo con Georef (fuente oficial) se tocan municipio y provincia. Si Georef no tiene municipio para ese
+  // punto ('georef-depto'), el municipio se completa con OSM: si OSM no respondió, mejor no tocarlo.
+  const georefOk = u.fuente === 'georef' || u.fuente === 'georef-depto';
+  if(georefOk && (u.fuente === 'georef' || u.osmOk) && u.municipio !== p.municipio) cambios.municipio = u.municipio;
+  if(georefOk && u.provincia && u.provincia !== p.provincia) cambios.provincia = u.provincia;
   // barrio solo si Nominatim respondió (si no, queda el que estaba)
   if(u.osmOk && (u.barrio || null) !== (p.barrio || null)) cambios.barrio = u.barrio || null;
   return cambios;
@@ -97,7 +97,7 @@ async function correr(guardar){
         log('#'+p.id+'  '+Object.keys(cambios).map(k => k+': '+mostrar(p[k])+' → '+mostrar(cambios[k])).join('  ·  '), 'ok');
       } else {
         sinCambio++;
-        if(!u.fuente || !u.osmOk) log('#'+p.id+' sin cambios (respondió '+(u.fuente ? 'Georef' : 'ni Georef')+', '+(u.osmOk ? 'OSM' : 'no OSM')+')', 'warn');
+        if(!u.fuente || !u.osmOk) log('#'+p.id+' sin cambios (fuente: '+(u.fuente || 'ninguna')+', OSM '+(u.osmOk ? 'ok' : 'no respondió')+')', 'warn');
       }
     }catch(e){
       fallidos++;
