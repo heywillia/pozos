@@ -1,0 +1,40 @@
+name: Mantener Supabase activo
+
+# Supabase pausa los proyectos del plan free después de ~7 días con poca actividad
+# (pasó en septiembre 2026 y la app quedó sin datos). Una consulta diaria de solo
+# lectura lo mantiene activo. Si la base no responde, el workflow falla y GitHub avisa por mail.
+on:
+  schedule:
+    - cron: "17 12 * * *" # todos los días, 9:17 hora Argentina
+  workflow_dispatch: # botón "Run workflow" para probarlo a mano
+
+permissions:
+  contents: read
+  actions: write # para re-habilitar este mismo workflow (ver último paso)
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      # GitHub desactiva los cron de repos públicos tras 60 días sin actividad en el repo.
+      # Re-habilitarlo por API reinicia ese plazo sin necesidad de commits de relleno.
+      - name: Evitar que GitHub desactive este cron
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/supabase-keepalive.yml/enable"
+
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: config.js
+          sparse-checkout-cone-mode: false
+
+      # URL y publishable key salen de config.js (ya son públicas), así no hay secretos que mantener
+      - name: Consultar Supabase
+        run: |
+          URL=$(grep -oE 'https://[a-z0-9]+\.supabase\.co' config.js)
+          KEY=$(grep -oE 'sb_publishable_[A-Za-z0-9_-]+' config.js)
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+            "$URL/rest/v1/pozos?select=id&limit=1" -H "apikey: $KEY")
+          echo "Supabase respondió HTTP $CODE"
+          test "$CODE" = "200"
